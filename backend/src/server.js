@@ -1,22 +1,41 @@
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
+import { loadConfig } from './config.js';
 import { hashPassword } from './crypto.js';
 import { seed } from './domain/seedData.js';
 import { createMemoryRepository } from './repositories/memory.js';
 import { createSqlRepository } from './repositories/sql.js';
 
-const port = Number(process.env.PORT) || 3200;
-const isProduction = process.env.NODE_ENV === 'production';
+let config;
+try {
+  config = loadConfig();
+} catch (err) {
+  console.error(`Invalid configuration: ${err.message}`);
+  process.exit(1);
+}
 
-// STORAGE=memory keeps everything in RAM; the default is Sequelize over DATABASE_URL (SQLite file).
-const repo = process.env.STORAGE === 'memory' ? createMemoryRepository() : await createSqlRepository();
-if (!isProduction && (await seed(repo, { hashPassword }))) console.log('Seeded synthetic demo data.');
+const repo = config.storage === 'memory' ? createMemoryRepository() : await createSqlRepository(config.databaseUrl);
+if (!config.production && (await seed(repo, { hashPassword }))) console.log('Seeded synthetic demo data.');
 
 const app = createApp({ repo, staticDir: fileURLToPath(new URL('../../frontend/dist', import.meta.url)) });
-app.listen(port, (err) => {
+const server = app.listen(config.port, (err) => {
   if (err) {
-    console.error(`Cannot start on port ${port}: ${err.message}`);
+    console.error(`Cannot start on port ${config.port}: ${err.message}`);
     process.exit(1);
   }
-  console.log(`Re:Trace API (${repo.kind} storage) on http://localhost:${port}`);
+  console.log(`Re:Trace API (${repo.kind} storage) on http://localhost:${config.port}`);
 });
+
+// #36: stop accepting connections, close the database, exit.
+let stopping = false;
+async function shutdown(signal) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`Shutting down (${signal})…`);
+  server.close();
+  server.closeAllConnections?.();
+  await repo.close();
+  process.exit(0);
+}
+process.on('SIGINT', () => void shutdown('SIGINT'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));

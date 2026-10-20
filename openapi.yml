@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Re:Trace API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Organise investigations of suspected online scams.
     Access: an investigator sees only their own cases — another investigator's case answers 404 so
@@ -14,6 +14,23 @@ security:
   - bearerAuth: []
 
 paths:
+  /health:
+    get:
+      summary: Liveness and storage kind
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, storage, version]
+                properties:
+                  status: { type: string, enum: [ok] }
+                  storage: { type: string }
+                  version: { type: string }
+
   /auth/register:
     post:
       summary: Create an investigator account and sign in
@@ -33,6 +50,8 @@ paths:
         '201': { description: Registered, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
 
   /auth/login:
     post:
@@ -51,6 +70,9 @@ paths:
       responses:
         '200': { description: Signed in, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooMany' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
 
   /auth/logout:
     post:
@@ -73,6 +95,8 @@ paths:
         - { $ref: '#/components/parameters/Q' }
         - { $ref: '#/components/parameters/Status' }
         - { $ref: '#/components/parameters/Sort' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
       responses:
         '200': { description: Cases, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CaseSummary' } } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -93,6 +117,8 @@ paths:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/CaseSummary' } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
 
   /cases/{caseId}:
     parameters: [{ $ref: '#/components/parameters/CaseId' }]
@@ -121,6 +147,8 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
 
   /cases/{caseId}/evidence:
     parameters: [{ $ref: '#/components/parameters/CaseId' }]
@@ -140,6 +168,8 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
 
   /cases/{caseId}/evidence/{itemId}:
     parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }]
@@ -153,6 +183,8 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
     delete:
       summary: Delete evidence (also removed from relationships' support lists)
       responses:
@@ -180,6 +212,8 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
 
   /cases/{caseId}/entities/{itemId}:
     parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }]
@@ -193,6 +227,8 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
     delete:
       summary: Delete an entity and its relationships
       responses:
@@ -231,6 +267,8 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
 
   /cases/{caseId}/relationships/{itemId}:
     parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }]
@@ -301,6 +339,8 @@ paths:
         - { $ref: '#/components/parameters/Q' }
         - { $ref: '#/components/parameters/Status' }
         - { $ref: '#/components/parameters/Sort' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
       responses:
         '200': { description: Cases, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CaseSummary' } } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -334,6 +374,8 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
 
   /admin/audit-events:
     get:
@@ -341,8 +383,10 @@ paths:
       parameters:
         - { name: caseId, in: query, schema: { type: integer } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+        - { $ref: '#/components/parameters/Offset' }
       responses:
         '200': { description: Events, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
@@ -356,12 +400,16 @@ components:
     Q: { name: q, in: query, description: 'Case-insensitive search in title and description', schema: { type: string, maxLength: 100 } }
     Status: { name: status, in: query, schema: { $ref: '#/components/schemas/CaseStatus' } }
     Sort: { name: sort, in: query, schema: { type: string, enum: [updated, created, title, risk], default: updated } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 100 } }
+    Offset: { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
 
   responses:
     BadRequest: { description: 'validation_error, invalid_relationship', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Unauthorized: { description: 'unauthorized, invalid_credentials', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Forbidden: { description: forbidden, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     NotFound: { description: not_found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    TooMany: { description: too_many_attempts, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    UnsupportedMedia: { description: unsupported_media_type, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Conflict: { description: 'email_taken, case_locked, last_admin', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   schemas:
@@ -373,7 +421,7 @@ components:
           type: object
           required: [code, message]
           properties:
-            code: { type: string, enum: [validation_error, unauthorized, invalid_credentials, email_taken, forbidden, not_found, case_locked, invalid_relationship, last_admin, server_error] }
+            code: { type: string, enum: [validation_error, unauthorized, invalid_credentials, email_taken, forbidden, not_found, case_locked, invalid_relationship, last_admin, too_many_attempts, unsupported_media_type, server_error] }
             message: { type: string }
 
     Role: { type: string, enum: [investigator, admin] }

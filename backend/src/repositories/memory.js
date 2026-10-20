@@ -30,7 +30,7 @@ export function createMemoryRepository() {
     },
     async createUser(user) {
       if (t.users.some((u) => u.email === user.email)) throw new Error('UNIQUE constraint failed: users.email');
-      return insert(t.users, user);
+      return insert(t.users, { disabled: false, ...user });
     },
     async updateUser(id, p) {
       return patch(t.users, id, p);
@@ -49,10 +49,13 @@ export function createMemoryRepository() {
     async deleteSession(token) {
       t.sessions.delete(token);
     },
+    async deleteSessionsOfUser(userId, exceptToken = null) {
+      for (const [token, s] of t.sessions) if (s.userId === userId && token !== exceptToken) t.sessions.delete(token);
+    },
 
     async createCase(c) {
       if (!byId(t.users, c.ownerId)) throw new Error('FOREIGN KEY constraint failed');
-      return insert(t.cases, c);
+      return insert(t.cases, { tags: [], notes: null, ...c });
     },
     async getCase(id) {
       return clone(byId(t.cases, id));
@@ -127,11 +130,11 @@ export function createMemoryRepository() {
     async addAudit(e) {
       insert(t.audit, e);
     },
-    async listAudit({ caseId = null, limit = 100 } = {}) {
+    async listAudit({ caseId = null, limit = 100, offset = 0 } = {}) {
       return t.audit
         .filter((e) => caseId == null || e.caseId === caseId)
         .sort((a, b) => b.at - a.at || b.id - a.id)
-        .slice(0, limit)
+        .slice(offset, offset + limit)
         .map(clone);
     },
   };

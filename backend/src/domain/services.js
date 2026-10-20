@@ -13,6 +13,8 @@ export const RELATIONSHIP_TYPES = ['contacted', 'paid', 'owns', 'links_to', 'sam
 export const ROLES = ['investigator', 'admin'];
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const SORTS = ['updated', 'created', 'title', 'risk'];
+export const LOGIN_MAX_FAILURES = 5;
+export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
 const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
 
@@ -82,6 +84,8 @@ const relationshipDto = (r) => ({
  */
 export function createServices(repo, deps) {
   const now = deps.now ?? Date.now;
+  // #39 failed logins per email: { count, since }. In-process: the app runs as one instance.
+  const failures = new Map();
 
   async function audit(actor, action, resourceType, resourceId, caseId = null) {
     await repo.addAudit({ actorId: actor?.id ?? null, action, resourceType, resourceId: resourceId ?? null, caseId, at: now() });
@@ -144,14 +148,23 @@ export function createServices(repo, deps) {
     return [...list].sort(by);
   }
 
-  async function filteredCases(cases, { q = '', status = null, sort = 'updated' } = {}) {
+  function intParam(value, { field, min, max, fallback }) {
+    if (value === undefined || value === null || value === '') return fallback;
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < min || (max !== undefined && n > max)) fail('validation_error', 400, `${field} must be an integer ${min}${max !== undefined ? `–${max}` : '+'}`);
+    return n;
+  }
+
+  async function filteredCases(cases, { q = '', status = null, sort = 'updated', limit, offset } = {}) {
     if (status) oneOf(status, CASE_STATUSES, 'status');
     oneOf(sort, SORTS, 'sort');
+    const lim = intParam(limit, { field: 'limit', min: 1, max: 100, fallback: 100 });
+    const off = intParam(offset, { field: 'offset', min: 0, fallback: 0 });
     const query = String(q).trim().toLocaleLowerCase();
     const picked = cases
       .filter((c) => !status || c.status === status)
       .filter((c) => !query || `${c.title} ${c.description ?? ''}`.toLocaleLowerCase().includes(query));
-    return sortCases(await Promise.all(picked.map(caseSummary)), sort);
+    return sortCases(await Promise.all(picked.map(caseSummary)), sort).slice(off, off + lim);
   }
 
   async function startSession(user) {
@@ -175,9 +188,18 @@ export function createServices(repo, deps) {
     },
 
     async login({ email, password } = {}) {
-      const user = await repo.findUserByEmail(String(email ?? '').trim().toLowerCase());
-      // Same error whether the email exists or not.
-      if (!user || !(await deps.verifyPassword(String(password ?? ''), user.passwordHash))) fail('invalid_credentials', 401);
+      const key = String(email ?? '').trim().toLowerCase();
+      const f = failures.get(key);
+      if (f && now() - f.since >= LOGIN_WINDOW_MS) failures.delete(key);
+      if ((failures.get(key)?.count ?? 0) >= LOGIN_MAX_FAILURES) fail('too_many_attempts', 429);
+      const user = await repo.findUserByEmail(key);
+      // Same error whether the email exists or not; unknown emails are counted too.
+      if (!user || !(await deps.verifyPassword(String(password ?? ''), user.passwordHash))) {
+        const cur = failures.get(key) ?? { count: 0, since: now() };
+        failures.set(key, { count: cur.count + 1, since: cur.since });
+        fail('invalid_credentials', 401);
+      }
+      failures.delete(key);
       await audit(user, 'user.login', 'user', user.id);
       return startSession(user);
     },
@@ -440,10 +462,11 @@ export function createServices(repo, deps) {
       return userDto(updated);
     },
 
-    async adminAudit(user, { caseId = null, limit = 100 } = {}) {
+    async adminAudit(user, { caseId = null, limit = 100, offset } = {}) {
       requireAdmin(user);
       const n = Math.min(Math.max(Number(limit) || 100, 1), 500);
-      const events = await repo.listAudit({ caseId: caseId == null || caseId === '' ? null : Number(caseId), limit: n });
+      const off = intParam(offset, { field: 'offset', min: 0, fallback: 0 });
+      const events = await repo.listAudit({ caseId: caseId == null || caseId === '' ? null : Number(caseId), limit: n, offset: off });
       const names = new Map();
       for (const e of events) if (e.actorId != null && !names.has(e.actorId)) names.set(e.actorId, (await repo.findUserById(e.actorId))?.name ?? null);
       return events.map((e) => ({

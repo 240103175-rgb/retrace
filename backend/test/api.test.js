@@ -10,11 +10,12 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
   describe(`API (${kind})`, () => {
     let server, base, ctx, contract;
     const tokens = {};
+    const logLines = [];
 
     before(async () => {
       ctx = await setup(makeRepo);
       contract = await loadContract();
-      const app = createApp({ repo: ctx.repo, now: () => NOW });
+      const app = createApp({ repo: ctx.repo, now: () => NOW, log: (line) => logLines.push(line) });
       await new Promise((resolve) => (server = app.listen(0, resolve)));
       base = `http://localhost:${server.address().port}/api/v1`;
       for (const [k, email] of [['aigerim', 'aigerim@retrace.test'], ['daniyar', 'daniyar@retrace.test'], ['admin', 'admin@retrace.test']]) {
@@ -39,6 +40,7 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
     }
 
     it('auth: register, login, me, logout, errors', async () => {
+      assert.equal((await call('GET', '/health')).data.status, 'ok');
       const reg = await call('POST', '/auth/register', { body: { email: 'new@retrace.test', password: 'long-enough', name: 'Новый' } });
       assert.equal(reg.status, 201);
       assert.equal('passwordHash' in reg.data.user, false);

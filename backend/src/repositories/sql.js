@@ -22,6 +22,7 @@ function defineModels(sequelize) {
       name: str(80),
       role: { type: DataTypes.ENUM('investigator', 'admin'), allowNull: false },
       passwordHash: str(200),
+      disabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       createdAt: ms(),
     },
     opts('users'),
@@ -33,6 +34,8 @@ function defineModels(sequelize) {
       title: str(120),
       description: txt(true),
       status: { type: DataTypes.ENUM('open', 'in_review', 'closed', 'archived'), allowNull: false },
+      tags: { type: DataTypes.TEXT, allowNull: false, defaultValue: '[]', get() { return JSON.parse(this.getDataValue('tags') ?? '[]'); }, set(v) { this.setDataValue('tags', JSON.stringify(v ?? [])); } },
+      notes: { type: DataTypes.TEXT, allowNull: true },
       createdAt: ms(),
       updatedAt: ms(),
     },
@@ -90,6 +93,26 @@ function defineModels(sequelize) {
   return { User, Session, Case, Evidence, Entity, Relationship, RelationshipEvidence, Report, AuditEvent };
 }
 
+/** Columns added after v1.0 (#38): added to existing tables on start, never dropped. */
+export const ADDED_COLUMNS = [
+  ['users', 'disabled', { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false }],
+  ['cases', 'tags', { type: DataTypes.TEXT, allowNull: false, defaultValue: '[]' }],
+  ['cases', 'notes', { type: DataTypes.TEXT, allowNull: true }],
+];
+
+export async function migrate(sequelize) {
+  const qi = sequelize.getQueryInterface();
+  const added = [];
+  for (const [table, column, spec] of ADDED_COLUMNS) {
+    const existing = await qi.describeTable(table);
+    if (!existing[column]) {
+      await qi.addColumn(table, column, spec);
+      added.push(`${table}.${column}`);
+    }
+  }
+  return added;
+}
+
 const plain = (row) => (row ? row.get({ plain: true }) : null);
 const num = (row) => {
   if (!row) return null;
@@ -108,6 +131,8 @@ export async function createSqlRepository(url = process.env.DATABASE_URL || DEFA
   if (sequelize.getDialect() === 'sqlite') await sequelize.query('PRAGMA foreign_keys = ON;');
   const m = defineModels(sequelize);
   await sequelize.sync();
+  const added = await migrate(sequelize);
+  if (added.length) console.log(`Migrated database: added ${added.join(', ')}`);
 
   const relOut = (r) => {
     const { support, ...rest } = plain(r);
@@ -136,6 +161,9 @@ export async function createSqlRepository(url = process.env.DATABASE_URL || DEFA
       await m.User.update(p, { where: { id } });
       return out(await m.User.findByPk(id));
     },
+    async deleteSessionsOfUser(userId, exceptToken = null) {
+      await m.Session.destroy({ where: { userId, ...(exceptToken ? { token: { [Op.ne]: exceptToken } } : {}) } });
+    },
     async listUsers() {
       return (await m.User.findAll({ order: [['id', 'ASC']] })).map(out);
     },
@@ -158,8 +186,9 @@ export async function createSqlRepository(url = process.env.DATABASE_URL || DEFA
       return out(await m.Case.findByPk(id));
     },
     async updateCase(id, p) {
-      await m.Case.update(p, { where: { id } });
-      return out(await m.Case.findByPk(id));
+      const c = await m.Case.findByPk(id);
+      await c.update(p);
+      return out(c);
     },
     async listCases({ ownerId } = {}) {
       return (await m.Case.findAll({ where: ownerId == null ? {} : { ownerId }, order: [['id', 'ASC']] })).map(out);
@@ -248,9 +277,9 @@ export async function createSqlRepository(url = process.env.DATABASE_URL || DEFA
     async addAudit(e) {
       await m.AuditEvent.create(e);
     },
-    async listAudit({ caseId = null, limit = 100 } = {}) {
+    async listAudit({ caseId = null, limit = 100, offset = 0 } = {}) {
       return (
-        await m.AuditEvent.findAll({ where: caseId == null ? {} : { caseId }, order: [['at', 'DESC'], ['id', 'DESC']], limit })
+        await m.AuditEvent.findAll({ where: caseId == null ? {} : { caseId }, order: [['at', 'DESC'], ['id', 'DESC']], limit, offset })
       ).map(out);
     },
   };

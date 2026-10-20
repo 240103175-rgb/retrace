@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test test/*.test.js",
-    "validate:api": "node -e \"require('@apidevtools/swagger-parser').validate('../openapi.yml').then(()=>console.log('openapi.yml is valid'))\""
+    "validate:api": "node -e \"require('@apidevtools/swagger-parser').validate('../openapi.yml').then(()=>console.log('openapi.yml is valid'))\"",
+    "db:reset": "node scripts/reset-db.js"
   },
   "dependencies": {
     "express": "^5.1.0",
