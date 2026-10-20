@@ -27,7 +27,9 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       await ctx.repo.close();
     });
 
-    async function call(method, path, { body, token, raw } = {}) {
+    // `invalid: true` marks a request that deliberately breaks the contract to test the server's refusal.
+    async function call(method, path, { body, token, raw, invalid = false } = {}) {
+      if (body !== undefined && !raw && !invalid) contract.checkRequest(method, `/api/v1${path}`, body);
       const res = await fetch(base + path, {
         method,
         headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
@@ -45,7 +47,7 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       assert.equal(reg.status, 201);
       assert.equal('passwordHash' in reg.data.user, false);
       assert.equal((await call('POST', '/auth/register', { body: { email: 'new@retrace.test', password: 'long-enough', name: 'X2' } })).data.error.code, 'email_taken');
-      assert.equal((await call('POST', '/auth/register', { body: { email: 'x@retrace.test', password: 'short', name: 'X2' } })).status, 400);
+      assert.equal((await call('POST', '/auth/register', { body: { email: 'x@retrace.test', password: 'short', name: 'X2' }, invalid: true })).status, 400);
       assert.equal((await call('POST', '/auth/login', { body: { email: 'new@retrace.test', password: 'wrong-pass' } })).data.error.code, 'invalid_credentials');
       assert.equal((await call('GET', '/me', { token: reg.data.token })).data.email, 'new@retrace.test');
       assert.equal((await call('PATCH', '/me', { token: reg.data.token, body: { name: 'Новый Н.' } })).data.name, 'Новый Н.');
@@ -64,7 +66,7 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       assert.equal((await call('GET', '/cases?q=OLX&sort=risk', { token: t })).data.length, 1);
       assert.equal((await call('GET', '/cases?sort=nope', { token: t })).status, 400);
       const c = (await call('POST', '/cases', { token: t, body: { title: 'Лотерея в Instagram', description: 'Выигрыш за «налог»' } })).data;
-      assert.equal((await call('POST', '/cases', { token: t, body: { title: 'AB' } })).status, 400);
+      assert.equal((await call('POST', '/cases', { token: t, body: { title: 'AB' }, invalid: true })).status, 400);
       const m = (await call('POST', `/cases/${c.id}/evidence`, { token: t, body: { type: 'message', content: 'Срочно оплатите налог на выигрыш, пришлите код из SMS', source: 'Instagram Direct', verification: 'confirmed', observedOn: '2026-10-19' } })).data;
       const l = (await call('POST', `/cases/${c.id}/evidence`, { token: t, body: { type: 'link', content: 'https://bit.ly/prize-kz' } })).data;
       assert.equal((await call('PATCH', `/cases/${c.id}/evidence/${l.id}`, { token: t, body: { verification: 'disputed' } })).data.verification, 'disputed');
@@ -144,7 +146,7 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       const admin = users.find((u) => u.role === 'admin');
       assert.equal((await call('PATCH', `/admin/users/${admin.id}`, { token: tokens.admin, body: { role: 'investigator' } })).data.error.code, 'last_admin');
       assert.equal((await call('PATCH', `/admin/users/99999`, { token: tokens.admin, body: { role: 'admin' } })).status, 404);
-      assert.equal((await call('PATCH', `/admin/users/${admin.id}`, { token: tokens.admin, body: { role: 'boss' } })).status, 400);
+      assert.equal((await call('PATCH', `/admin/users/${admin.id}`, { token: tokens.admin, body: { role: 'boss' }, invalid: true })).status, 400);
       const log = (await call('GET', `/admin/audit-events?caseId=${ctx.job.id}&limit=5`, { token: tokens.admin })).data;
       assert.ok(log.every((e) => e.caseId === ctx.job.id));
       const full = JSON.stringify((await call('GET', '/admin/audit-events?limit=500', { token: tokens.admin })).data);

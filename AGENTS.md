@@ -41,6 +41,9 @@ Demo accounts (synthetic, see `backend/src/seedData.js`): investigator `aigerim@
 - `_docs/task-template.md` — the issue format.
 - `_docs/design-system.md` — design references and tokens.
 - `_docs/architecture.md`, `_docs/test-plan.md` — layers, data model, tests.
+- `_docs/decisions.md` — why things are as they are; add an entry for every non-obvious choice.
+- `_docs/threat-model.md` — security controls and accepted gaps; update when touching auth or access.
+- `_docs/api.md` — API by example; `CHANGELOG.md` — record user-visible changes.
 - `_docs/team/pm.md`, `_docs/team/qa.md`, `_docs/team/software-engineer.md`, `_docs/team/qa-engineer.md` — role instructions.
 
 If you were not told your role, ask before doing anything.

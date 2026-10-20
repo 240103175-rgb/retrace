@@ -136,3 +136,12 @@ describe('migrations (#38)', () => {
     await again.close();
   });
 });
+
+describe('request contract (#85)', () => {
+  it('rejects request bodies that break the contract', async () => {
+    const contract = await loadContract();
+    assert.doesNotThrow(() => contract.checkRequest('POST', '/api/v1/cases', { title: 'Нормально' }));
+    assert.throws(() => contract.checkRequest('POST', '/api/v1/cases', { description: 'нет названия' }), /must have required property 'title'/);
+    assert.throws(() => contract.checkRequest('POST', '/api/v1/cases/1/evidence', { type: 'video', content: 'x' }), /type/);
+  });
+});

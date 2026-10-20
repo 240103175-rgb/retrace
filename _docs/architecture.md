@@ -32,9 +32,9 @@ One source of business rules: the same `domain/` code runs in the backend and in
 
 | Table | Fields |
 |---|---|
-| users | id, email (unique), name, role (investigator/admin), passwordHash (scrypt), createdAt |
+| users | id, email (unique), name, role (investigator/admin), passwordHash (scrypt), disabled, createdAt |
 | sessions | token (PK), userId → users, expiresAt (7 days) |
-| cases | id, ownerId → users, title, description, status (open/in_review/closed/archived), createdAt, updatedAt |
+| cases | id, ownerId → users, title, description, status (open/in_review/closed/archived), tags (JSON, ≤10), notes, createdAt, updatedAt |
 | evidence | id, caseId → cases, type, content, source, observedOn, amount, verification (unverified/confirmed/disputed), createdAt |
 | entities | id, caseId → cases, type, label, note |
 | relationships | id, caseId → cases, sourceId → entities, targetId → entities, type |
@@ -46,4 +46,15 @@ Times are UTC milliseconds in storage and ISO strings in the API. Deleting an en
 
 ## Risk engine
 
-`backend/src/domain/risk.js` — six weighted rules (see `_docs/plan.md` §4), each returning the evidence/entities that triggered it. Score capped at 100; levels low < 30 ≤ medium < 60 ≤ high. Computed on read, so it always reflects the current case; reports store the result in their snapshot.
+`backend/src/domain/risk.js` — eight weighted rules (see `_docs/plan.md` §4), each returning the evidence/entities that triggered it. Score capped at 100; levels low < 30 ≤ medium < 60 ≤ high. Computed on read, so it always reflects the current case; reports store the result in their snapshot.
+
+## Cross-cutting (v1.1)
+
+- **Config** — `backend/src/config.js` validates `PORT`, `STORAGE`, `DATABASE_URL`; bad values stop the start with a clear message.
+- **Migrations** — `sql.js` `migrate()` adds missing columns on start, so an older database keeps its data.
+- **HTTP** — security headers + CSP, 100 KB JSON limit, 415 for non-JSON bodies, request log (method, path, status, ms — never bodies or tokens), `GET /health` without auth.
+- **Shutdown** — SIGINT/SIGTERM stop accepting requests and close the database.
+- **Login limit** — 5 failures per email in 15 minutes (in memory, see `_docs/threat-model.md`).
+- **Export** — `GET /cases/{id}/export` (JSON, `retrace-case/1`) and `/evidence.csv` (UTF-8 with BOM).
+
+Decisions and their reasons: `_docs/decisions.md`.

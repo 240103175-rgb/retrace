@@ -39,6 +39,16 @@ export async function loadContract() {
         throw new Error(`${method} ${route.path} ${status}: ${ajv.errorsText(validate.errors)}\n${JSON.stringify(body).slice(0, 300)}`);
       }
     },
+    /** Throws if a JSON request body does not match the operation's requestBody schema (#85). */
+    checkRequest(method, url, body) {
+      const pathname = new URL(url, 'http://x').pathname;
+      const route = routes.find((r) => r.regex.test(pathname));
+      const op = route?.ops[method.toLowerCase()];
+      const schema = op?.requestBody?.content?.['application/json']?.schema;
+      if (!schema) return;
+      const validate = ajv.compile(schema);
+      if (!validate(body)) throw new Error(`request ${method} ${route.path}: ${ajv.errorsText(validate.errors)}`);
+    },
     operations: () =>
       routes.flatMap((r) =>
         Object.keys(r.ops)

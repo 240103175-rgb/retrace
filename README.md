@@ -45,6 +45,9 @@ npm run dev
 ```bash
 npm test                # backend (memory + SQLite, API contract, access, persistence) and frontend
 npm run validate:api    # openapi.yml
+npm run test:coverage -w backend   # backend line coverage
+npm run smoke -w backend -- http://localhost:3200   # check a running server
+npm run db:reset -w backend        # recreate the SQLite demo database
 ```
 
 ## Docs
@@ -57,5 +60,10 @@ npm run validate:api    # openapi.yml
 | `_docs/design-system.md` | Design references and tokens |
 | `_docs/test-plan.md` | Test levels and the manual session |
 | `_docs/process.md`, `_docs/task-template.md`, `_docs/team/*.md` | How issues move: PM → QA → engineer → QA engineer |
+| `_docs/api.md` | API by example (curl) |
+| `_docs/decisions.md`, `_docs/development-log.md` | Why things are as they are; how the work went |
+| `_docs/threat-model.md`, `_docs/release-checklist.md` | Security and release |
+| `_docs/user-guide.md` | Руководство пользователя (RU) |
+| `CHANGELOG.md` | Versions |
 | `openapi.yml` | API contract |
 | `AGENTS.md` | Context for coding agents |
