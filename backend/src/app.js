@@ -137,7 +137,8 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
   app.use('/api/v1', api);
 
   if (staticDir && existsSync(staticDir)) {
-    app.use(express.static(staticDir));
+    express.static.mime?.define?.({ 'application/manifest+json': ['webmanifest'] });
+    app.use(express.static(staticDir, { setHeaders: (res, path) => path.endsWith('.webmanifest') && res.type('application/manifest+json') }));
     app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(join(staticDir, 'index.html')));
   }
 

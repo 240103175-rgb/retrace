@@ -5,6 +5,9 @@ import type {
   CaseFilter,
   CaseStatus,
   CaseSummary,
+  AuditFilter,
+  Download,
+  EvidenceFilter,
   Entity,
   EntityInput,
   Evidence,
@@ -22,18 +25,28 @@ import type {
 
 export interface RetraceApi {
   setToken(token: string | null): void;
+  /** Register a handler for 401 responses while signed in (#78). */
+  onUnauthorized(fn: (() => void) | null): void;
 
   register(input: { email: string; password: string; name: string }): Promise<Session>;
   login(input: { email: string; password: string }): Promise<Session>;
   logout(): Promise<void>;
   me(): Promise<User>;
+  logoutAll(): Promise<void>;
+  updateMe(input: { name: string }): Promise<User>;
+  changePassword(input: { currentPassword: string; newPassword: string }): Promise<void>;
 
   listCases(filter?: CaseFilter): Promise<CaseSummary[]>;
   createCase(input: { title: string; description?: string }): Promise<CaseSummary>;
   getCase(id: number): Promise<CaseSummary>;
-  updateCase(id: number, patch: { title?: string; description?: string; status?: CaseStatus }): Promise<CaseSummary>;
+  updateCase(
+    id: number,
+    patch: { title?: string; description?: string; status?: CaseStatus; tags?: string[]; notes?: string | null },
+  ): Promise<CaseSummary>;
+  exportCase(id: number): Promise<Download>;
+  exportEvidenceCsv(id: number): Promise<Download>;
 
-  listEvidence(caseId: number): Promise<Evidence[]>;
+  listEvidence(caseId: number, filter?: EvidenceFilter): Promise<Evidence[]>;
   createEvidence(caseId: number, input: EvidenceInput): Promise<Evidence>;
   updateEvidence(caseId: number, id: number, patch: Partial<EvidenceInput>): Promise<Evidence>;
   deleteEvidence(caseId: number, id: number): Promise<void>;
@@ -57,6 +70,6 @@ export interface RetraceApi {
   adminStats(): Promise<AdminStats>;
   adminCases(filter?: CaseFilter): Promise<CaseSummary[]>;
   adminUsers(): Promise<User[]>;
-  adminSetRole(userId: number, role: Role): Promise<User>;
-  adminAudit(params?: { caseId?: number; limit?: number }): Promise<AuditEvent[]>;
+  adminUpdateUser(userId: number, patch: { role?: Role; disabled?: boolean }): Promise<User>;
+  adminAudit(params?: AuditFilter): Promise<AuditEvent[]>;
 }

@@ -23,7 +23,7 @@ const mockDeps = (now: () => number) => ({
   randomToken: () => `mock-${crypto.randomUUID()}`,
 });
 
-export function createMockService(options: MockOptions = {}): RetraceApi & { failNext(code: ErrorCode, status?: number): void } {
+export function createMockService(options: MockOptions = {}): RetraceApi & { failNext(code: ErrorCode, status?: number): void; expireSession(): Promise<void> } {
   const latency = options.latency ?? 200;
   const now = options.now ?? Date.now;
   const repo = createMemoryRepository();
@@ -33,6 +33,7 @@ export function createMockService(options: MockOptions = {}): RetraceApi & { fai
   const ready = seed(repo, { hashPassword: deps.hashPassword, now: now() });
   let token: string | null = null;
   let pendingFailure: ApiError | null = null;
+  let onUnauthorized: (() => void) | null = null;
 
   async function call<T>(fn: () => Promise<T>): Promise<T> {
     await ready;
@@ -43,8 +44,11 @@ export function createMockService(options: MockOptions = {}): RetraceApi & { fai
       throw err;
     }
     try {
-      return structuredClone(await fn());
+      const result = await fn();
+      // Downloads carry a Blob; everything else is cloned so callers cannot mutate mock state.
+      return result && typeof result === 'object' && 'blob' in result ? result : structuredClone(result);
     } catch (err) {
+      if (err instanceof AppError && err.status === 401 && token && onUnauthorized) onUnauthorized();
       if (err instanceof AppError) throw new ApiError(err.code as ErrorCode, err.status, err.message);
       throw err;
     }
@@ -64,18 +68,38 @@ export function createMockService(options: MockOptions = {}): RetraceApi & { fai
     setToken(next) {
       token = next;
     },
+    onUnauthorized(fn) {
+      onUnauthorized = fn;
+    },
+    /** Test hook: end the current session as if it expired. */
+    async expireSession() {
+      await svc.logout(token);
+    },
 
     register: (input) => call(() => svc.register(input)),
     login: (input) => call(() => svc.login(input)),
     logout: () => call(() => svc.logout(token)),
     me: () => authed(async (u) => userDto(u) as User),
+    logoutAll: () => authed((u) => svc.logoutAll(u)),
+    updateMe: (input) => authed((u) => svc.updateMe(u, input)),
+    changePassword: (input) => authed((u) => svc.changePassword(u, token, input)),
 
     listCases: (filter = {}) => authed((u) => svc.listCases(u, filter)),
     createCase: (input) => authed((u) => svc.createCase(u, input)),
     getCase: (id) => authed((u) => svc.getCase(u, id)),
     updateCase: (id, patch) => authed((u) => svc.updateCase(u, id, patch)),
+    exportCase: (id) =>
+      authed(async (u) => ({
+        filename: `retrace-case-${id}.json`,
+        blob: new Blob([JSON.stringify(await svc.exportCase(u, id), null, 2)], { type: 'application/json' }),
+      })),
+    exportEvidenceCsv: (id) =>
+      authed(async (u) => {
+        const { csv } = await svc.exportEvidenceCsv(u, id);
+        return { filename: `retrace-case-${id}-evidence.csv`, blob: new Blob([csv], { type: 'text/csv;charset=utf-8' }) };
+      }),
 
-    listEvidence: (caseId) => authed((u) => svc.listEvidence(u, caseId)),
+    listEvidence: (caseId, filter = {}) => authed((u) => svc.listEvidence(u, caseId, filter)),
     createEvidence: (caseId, input) => authed((u) => svc.createEvidence(u, caseId, input)),
     updateEvidence: (caseId, id, patch) => authed((u) => svc.updateEvidence(u, caseId, id, patch)),
     deleteEvidence: (caseId, id) => authed((u) => svc.deleteEvidence(u, caseId, id)),
@@ -99,7 +123,7 @@ export function createMockService(options: MockOptions = {}): RetraceApi & { fai
     adminStats: () => authed((u) => svc.adminStats(u)),
     adminCases: (filter = {}) => authed((u) => svc.adminCases(u, filter)),
     adminUsers: () => authed((u) => svc.adminUsers(u)),
-    adminSetRole: (userId, role) => authed((u) => svc.adminSetRole(u, userId, { role })),
+    adminUpdateUser: (userId, patch) => authed((u) => svc.adminSetRole(u, userId, patch)),
     adminAudit: (params = {}) => authed((u) => svc.adminAudit(u, params)),
   };
 }

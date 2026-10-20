@@ -8,7 +8,15 @@ export type EntityType = 'person' | 'account' | 'phone' | 'link' | 'card' | 'wal
 export type RelationshipType = 'contacted' | 'paid' | 'owns' | 'links_to' | 'same_as';
 export type RiskLevel = 'low' | 'medium' | 'high';
 export type CaseSort = 'updated' | 'created' | 'title' | 'risk';
-export type RuleId = 'credential_request' | 'urgent_payment' | 'suspicious_link' | 'personal_payment' | 'hub_entity' | 'disputed_evidence';
+export type RuleId =
+  | 'credential_request'
+  | 'urgent_payment'
+  | 'remote_access'
+  | 'suspicious_link'
+  | 'personal_payment'
+  | 'fake_prize'
+  | 'hub_entity'
+  | 'disputed_evidence';
 
 export type ErrorCode =
   | 'validation_error'
@@ -20,6 +28,13 @@ export type ErrorCode =
   | 'case_locked'
   | 'invalid_relationship'
   | 'last_admin'
+  | 'too_many_attempts'
+  | 'unsupported_media_type'
+  | 'duplicate_entity'
+  | 'duplicate_relationship'
+  | 'wrong_password'
+  | 'account_disabled'
+  | 'self_action'
   | 'network'
   | 'server_error';
 
@@ -28,6 +43,7 @@ export interface User {
   email: string;
   name: string;
   role: Role;
+  disabled: boolean;
   createdAt: string;
 }
 
@@ -41,6 +57,8 @@ export interface CaseSummary {
   title: string;
   description: string;
   status: CaseStatus;
+  tags: string[];
+  notes: string | null;
   ownerId: number;
   ownerName: string;
   createdAt: string;
@@ -128,6 +146,8 @@ export interface ReportSummary {
   createdAt: string;
   createdBy: number;
   createdByName: string | null;
+  riskScore: number;
+  riskLevel: RiskLevel;
 }
 
 export interface Report extends ReportSummary {
@@ -146,6 +166,7 @@ export interface AdminStats {
   casesByStatus: Record<CaseStatus, number>;
   evidence: number;
   highRiskCases: number;
+  casesLast7Days: number;
 }
 
 export interface AuditEvent {
@@ -163,6 +184,28 @@ export interface CaseFilter {
   q?: string;
   status?: CaseStatus | null;
   sort?: CaseSort;
+  tag?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+export interface EvidenceFilter {
+  q?: string;
+  type?: EvidenceType | null;
+  verification?: Verification | null;
+}
+
+export interface AuditFilter {
+  caseId?: number;
+  limit?: number;
+  offset?: number;
+  actorId?: number | null;
+  action?: string | null;
+}
+
+export interface Download {
+  filename: string;
+  blob: Blob;
 }
 
 export class ApiError extends Error {

@@ -7,8 +7,11 @@ const STORAGE_KEY = 'retrace_token';
 interface AuthValue {
   user: User | null;
   checking: boolean;
+  /** True after the API rejected our token mid-session (#78). */
+  expired: boolean;
   signIn(session: Session): void;
   signOut(): Promise<void>;
+  setUser(user: User): void;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -33,6 +36,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const api = useApi();
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(() => Boolean(read()));
+  const [expired, setExpired] = useState(false);
+
+  useEffect(() => {
+    api.onUnauthorized(() => {
+      api.setToken(null);
+      write(null);
+      setUser(null);
+      setExpired(true);
+    });
+    return () => api.onUnauthorized(null);
+  }, [api]);
 
   useEffect(() => {
     const token = read();
@@ -52,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (session: Session) => {
       api.setToken(session.token);
       write(session.token);
+      setExpired(false);
       setUser(session.user);
     },
     [api],
@@ -67,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [api]);
 
-  const value = useMemo(() => ({ user, checking, signIn, signOut }), [user, checking, signIn, signOut]);
+  const value = useMemo(() => ({ user, checking, expired, signIn, signOut, setUser }), [user, checking, expired, signIn, signOut]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

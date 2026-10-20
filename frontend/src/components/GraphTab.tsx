@@ -50,6 +50,11 @@ export function GraphTab({ caseData }: CaseTabProps) {
   if (g.nodes.length === 0) return <Empty>{T.emptyGraph}</Empty>;
   const pos = layout(g);
   const node = g.nodes.find((x) => x.id === selected) ?? null;
+  // #69 neighbours of the selected node stay bright, everything else is dimmed.
+  const near = new Set<number>(selected === null ? [] : [selected]);
+  if (selected !== null) for (const e of g.edges) if (e.sourceId === selected || e.targetId === selected) near.add(e.sourceId).add(e.targetId);
+  const dim = (id: number) => selected !== null && !near.has(id);
+  const types = [...new Set(g.nodes.map((n) => n.type))];
   const label = (id: number) => g.nodes.find((x) => x.id === id)?.label ?? '?';
   // Edge captions only when there is room: not on phones, not on crowded graphs.
   const captions = !narrow && g.nodes.length <= 14;
@@ -58,7 +63,8 @@ export function GraphTab({ caseData }: CaseTabProps) {
 
   return (
     <div className="graph-wrap">
-      <svg className="graph" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={T.graph} data-testid="graph">
+      <div className="graph-col">
+      <svg className="graph" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={T.graph} data-testid="graph" onClick={(e) => e.target === e.currentTarget && setSelected(null)}>
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0 0 10 5 0 10z" className="arrow-head" />
@@ -75,8 +81,9 @@ export function GraphTab({ caseData }: CaseTabProps) {
           const x2 = b.x - (dx / len) * (NODE_R + 4);
           const y2 = b.y - (dy / len) * (NODE_R + 4);
           const active = selected === e.sourceId || selected === e.targetId;
+          const faded = selected !== null && !active;
           return (
-            <g key={e.id} className={`edge${active ? ' is-active' : ''}`} data-testid="graph-edge">
+            <g key={e.id} className={`edge${active ? ' is-active' : ''}${faded ? ' is-dim' : ''}`} data-testid="graph-edge">
               <line x1={x1} y1={y1} x2={x2} y2={y2} markerEnd="url(#arrow)" />
               {captions && (
                 <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6} textAnchor="middle">
@@ -91,7 +98,7 @@ export function GraphTab({ caseData }: CaseTabProps) {
           return (
             <g
               key={n.id}
-              className={`node node-${n.type}${selected === n.id ? ' is-selected' : ''}`}
+              className={`node node-${n.type}${selected === n.id ? ' is-selected' : ''}${dim(n.id) ? ' is-dim' : ''}`}
               transform={`translate(${p.x} ${p.y})`}
               onClick={() => setSelected(n.id)}
               onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelected(n.id)}
@@ -111,6 +118,25 @@ export function GraphTab({ caseData }: CaseTabProps) {
           );
         })}
       </svg>
+      <ul className="legend" aria-label={T.legend} data-testid="legend">
+        {types.map((tp) => (
+          <li key={tp} className={`legend-${tp}`}>
+            <span className="legend-dot">{ENTITY_ICON[tp]}</span> {ENTITY_TYPE[tp]}
+          </li>
+        ))}
+        <li className="muted">→ {T.arrowMeaning}</li>
+      </ul>
+      <details className="graph-text">
+        <summary>{T.graphText}</summary>
+        <ul>
+          {g.edges.map((e) => (
+            <li key={e.id}>
+              {label(e.sourceId)} — {RELATIONSHIP[e.type]} → {label(e.targetId)}
+            </li>
+          ))}
+        </ul>
+      </details>
+      </div>
       <aside className="graph-panel" aria-live="polite">
         {node ? (
           <>

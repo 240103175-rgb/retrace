@@ -6,7 +6,7 @@ import { useToast } from '../lib/toast';
 import { errorKey, useAsync } from '../lib/useAsync';
 import type { CaseTabProps } from '../pages/CasePage';
 import { useApi } from '../services/ApiContext';
-import { Empty, ErrorBox, Loading } from './ui';
+import { Empty, ErrorBox, Loading, RiskBadge } from './ui';
 
 export function ReportsTab({ caseData, owner }: CaseTabProps) {
   const api = useApi();
@@ -54,6 +54,7 @@ export function ReportsTab({ caseData, owner }: CaseTabProps) {
                 {' · '}
                 {T.generatedBy}: {r.createdByName}
               </span>
+              <RiskBadge score={r.riskScore} level={r.riskLevel} />
             </li>
           ))}
         </ul>

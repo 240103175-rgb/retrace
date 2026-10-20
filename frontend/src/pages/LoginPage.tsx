@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTitle } from '../components/kit';
 import { Field, FormError, Logo } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { T, t } from '../lib/text';
@@ -12,7 +13,8 @@ export function safeNext(next: string | null): string {
 
 export function LoginPage() {
   const api = useApi();
-  const { user, signIn } = useAuth();
+  const { user, signIn, expired } = useAuth();
+  useTitle(T.login);
   const navigate = useNavigate();
   const next = safeNext(useSearchParams()[0].get('next'));
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -49,6 +51,7 @@ export function LoginPage() {
         <Logo />
         <p className="muted">{T.appTagline}</p>
         <h1>{mode === 'login' ? T.login : T.register}</h1>
+        {expired && !error && <div className="notice">{T.sessionExpired}</div>}
         <FormError message={error} />
         <form className="form" onSubmit={submit}>
           {mode === 'register' && (

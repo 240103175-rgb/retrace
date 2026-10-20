@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { ConfirmProvider, ErrorBoundary } from './components/kit';
 import { Loading, Shell } from './components/ui';
 import { AuthProvider, useAuth } from './lib/auth';
 import { T } from './lib/text';
@@ -8,6 +9,7 @@ import { AdminPage } from './pages/AdminPage';
 import { CasePage } from './pages/CasePage';
 import { CasesPage } from './pages/CasesPage';
 import { LoginPage } from './pages/LoginPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { ReportPage } from './pages/ReportPage';
 import type { RetraceApi } from './services/api';
 import { ApiProvider } from './services/ApiContext';
@@ -41,6 +43,7 @@ export function AppRoutes({ mock }: { mock: boolean }) {
               <Route path="/cases/:id" element={<RequireUser><CasePage /></RequireUser>} />
               <Route path="/cases/:id/reports/:reportId" element={<RequireUser><ReportPage /></RequireUser>} />
               <Route path="/admin" element={<RequireUser admin><AdminPage /></RequireUser>} />
+              <Route path="/profile" element={<RequireUser><ProfilePage /></RequireUser>} />
               <Route path="*" element={<section className="panel center"><h1>{T.notFound}</h1></section>} />
             </Routes>
           </Shell>
@@ -54,9 +57,13 @@ export function App({ api, mock, router = true }: { api: RetraceApi; mock: boole
   const tree = (
     <ApiProvider api={api}>
       <ToastProvider>
-        <AuthProvider>
-          <AppRoutes mock={mock} />
-        </AuthProvider>
+        <ConfirmProvider>
+          <AuthProvider>
+            <ErrorBoundary>
+              <AppRoutes mock={mock} />
+            </ErrorBoundary>
+          </AuthProvider>
+        </ConfirmProvider>
       </ToastProvider>
     </ApiProvider>
   );

@@ -5,6 +5,7 @@ import { errorKey, useAsync } from '../lib/useAsync';
 import type { CaseTabProps } from '../pages/CasePage';
 import { useApi } from '../services/ApiContext';
 import type { Entity, EntityType, RelationshipType } from '../services/types';
+import { CharCounter, useConfirm, useDiscardGuard, useUnsavedWarning } from './kit';
 import { Empty, ErrorBox, Field, FormError, Loading } from './ui';
 
 export function EntitiesTab({ caseData, editable, onChanged }: CaseTabProps) {
@@ -24,6 +25,19 @@ export function EntitiesTab({ caseData, editable, onChanged }: CaseTabProps) {
   const [entityForm, setEntityForm] = useState<{ type: EntityType; label: string; note: string } | null>(null);
   const [linkForm, setLinkForm] = useState<{ sourceId: string; targetId: string; type: RelationshipType; evidenceIds: number[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
+  const guard = useDiscardGuard();
+  const entityDirty = Boolean(entityForm && (entityForm.label || entityForm.note));
+  useUnsavedWarning(entityDirty);
+
+  const copy = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast('ok', T.ok_copied);
+    } catch {
+      toast('err', T.copyFailed);
+    }
+  };
 
   const after = (msg: string) => {
     toast('ok', msg);
@@ -65,8 +79,8 @@ export function EntitiesTab({ caseData, editable, onChanged }: CaseTabProps) {
     }
   };
 
-  const remove = async (fn: () => Promise<void>) => {
-    if (!window.confirm(T.confirmDelete)) return;
+  const remove = async (fn: () => Promise<void>, what: string) => {
+    if (!(await confirm({ title: T.confirmDelete, text: what }))) return;
     try {
       await fn();
       after(T.ok_deleted);
@@ -111,11 +125,11 @@ export function EntitiesTab({ caseData, editable, onChanged }: CaseTabProps) {
               <input value={entityForm.label} onChange={(e) => setEntityForm({ ...entityForm, label: e.target.value })} maxLength={200} />
             </Field>
           </div>
-          <Field label={T.note}>
+          <Field label={T.note} extra={<CharCounter value={entityForm.note} max={1000} />}>
             <input value={entityForm.note} onChange={(e) => setEntityForm({ ...entityForm, note: e.target.value })} maxLength={1000} />
           </Field>
           <div className="row-end">
-            <button type="button" className="btn btn-ghost" onClick={() => setEntityForm(null)}>
+            <button type="button" className="btn btn-ghost" onClick={() => void guard(entityDirty).then((ok) => ok && setEntityForm(null))}>
               {T.cancel}
             </button>
             <button className="btn btn-primary">{T.save}</button>
@@ -136,11 +150,16 @@ export function EntitiesTab({ caseData, editable, onChanged }: CaseTabProps) {
                   {en.note ? ` · ${en.note}` : ''}
                 </small>
               </span>
-              {editable && (
-                <button type="button" className="icon-btn" aria-label={`${T.delete} ${en.label}`} onClick={() => void remove(() => api.deleteEntity(caseData.id, en.id))}>
-                  ×
+              <span className="entity-actions">
+                <button type="button" className="icon-btn" aria-label={`${T.copy} ${en.label}`} title={T.copy} onClick={() => void copy(en.label)}>
+                  ⧉
                 </button>
-              )}
+                {editable && (
+                  <button type="button" className="icon-btn" aria-label={`${T.delete} ${en.label}`} onClick={() => void remove(() => api.deleteEntity(caseData.id, en.id), en.label)}>
+                    ×
+                  </button>
+                )}
+              </span>
             </li>
           ))}
         </ul>
@@ -230,7 +249,12 @@ export function EntitiesTab({ caseData, editable, onChanged }: CaseTabProps) {
                 {T.evidence}: {r.evidenceIds.length}
               </span>
               {editable && (
-                <button type="button" className="icon-btn" aria-label={T.delete} onClick={() => void remove(() => api.deleteRelationship(caseData.id, r.id))}>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label={`${T.delete}: ${name(r.sourceId)} ${RELATIONSHIP[r.type]} ${name(r.targetId)}`}
+                  onClick={() => void remove(() => api.deleteRelationship(caseData.id, r.id), `${name(r.sourceId)} ${RELATIONSHIP[r.type]} ${name(r.targetId)}`)}
+                >
                   ×
                 </button>
               )}

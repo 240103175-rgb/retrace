@@ -2,7 +2,7 @@ import { LEVEL, LINK_PROBLEM, RULE, T } from '../lib/text';
 import { useAsync } from '../lib/useAsync';
 import type { CaseTabProps } from '../pages/CasePage';
 import { useApi } from '../services/ApiContext';
-import type { Risk } from '../services/types';
+import type { Risk, RuleId } from '../services/types';
 import { ErrorBox, Loading } from './ui';
 
 export function RiskView({ risk }: { risk: Risk }) {
@@ -44,6 +44,17 @@ export function RiskView({ risk }: { risk: Risk }) {
           ))}
         </ul>
       )}
+      <h3>{T.notTriggered}</h3>
+      <ul className="rules-off" data-testid="rules-off">
+        {(Object.keys(RULE) as RuleId[])
+          .filter((id) => !risk.rules.some((r) => r.id === id))
+          .map((id) => (
+            <li key={id}>
+              <span aria-hidden="true">✓</span> {RULE[id].title}
+              <small className="muted"> — {RULE[id].hint}</small>
+            </li>
+          ))}
+      </ul>
       <p className="disclaimer">{T.disclaimer}</p>
     </div>
   );

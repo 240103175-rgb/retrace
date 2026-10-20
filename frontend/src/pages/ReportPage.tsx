@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { RiskView } from '../components/RiskTab';
+import { useTitle } from '../components/kit';
 import { ErrorBox, Loading } from '../components/ui';
 import { date, dateTime, money } from '../lib/format';
 import { ENTITY_ICON, ENTITY_TYPE, EVIDENCE_TYPE, RELATIONSHIP, STATUS, T, VERIFICATION } from '../lib/text';
@@ -10,6 +11,7 @@ export function ReportPage() {
   const api = useApi();
   const { id, reportId } = useParams();
   const report = useAsync(() => api.getReport(Number(id), Number(reportId)), [api, id, reportId]);
+  useTitle(report.data ? `Отчёт: ${report.data.snapshot.case.title}` : 'Отчёт');
   if (report.error) return <ErrorBox error={report.error} onRetry={report.reload} />;
   if (!report.data) return <Loading />;
   const r = report.data;

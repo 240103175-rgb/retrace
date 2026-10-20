@@ -6,6 +6,7 @@ import { errorKey, useAsync } from '../lib/useAsync';
 import type { CaseTabProps } from '../pages/CasePage';
 import { useApi } from '../services/ApiContext';
 import type { Evidence, EvidenceType, Verification } from '../services/types';
+import { CharCounter, useConfirm, useDiscardGuard, useUnsavedWarning } from './kit';
 import { Empty, ErrorBox, Field, FormError, Loading, VerificationPill } from './ui';
 
 interface Draft {
@@ -21,20 +22,29 @@ const EMPTY: Draft = { type: 'message', content: '', source: '', observedOn: '',
 export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
   const api = useApi();
   const toast = useToast();
-  const list = useAsync(() => api.listEvidence(caseData.id), [api, caseData.id]);
+  const [filter, setFilter] = useState<{ q: string; type: EvidenceType | ''; verification: Verification | '' }>({ q: '', type: '', verification: '' });
+  const list = useAsync(
+    () => api.listEvidence(caseData.id, { q: filter.q, type: filter.type || null, verification: filter.verification || null }),
+    [api, caseData.id, filter.q, filter.type, filter.verification],
+  );
+  const confirm = useConfirm();
+  const guard = useDiscardGuard();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [initial, setInitial] = useState<Draft | null>(null);
+  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(initial);
+  useUnsavedWarning(dirty);
 
   const open = (e?: Evidence) => {
     setError(null);
     setEditingId(e?.id ?? null);
-    setDraft(
-      e
-        ? { type: e.type, content: e.content, source: e.source ?? '', observedOn: e.observedOn ?? '', amount: e.amount == null ? '' : String(e.amount), verification: e.verification }
-        : EMPTY,
-    );
+    const d: Draft = e
+      ? { type: e.type, content: e.content, source: e.source ?? '', observedOn: e.observedOn ?? '', amount: e.amount == null ? '' : String(e.amount), verification: e.verification }
+      : EMPTY;
+    setDraft(d);
+    setInitial(d);
   };
 
   const save = async (ev: FormEvent) => {
@@ -69,7 +79,7 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
   };
 
   const remove = async (e: Evidence) => {
-    if (!window.confirm(T.confirmDelete)) return;
+    if (!(await confirm({ title: T.confirmDelete, text: e.content.slice(0, 120) }))) return;
     try {
       await api.deleteEvidence(caseData.id, e.id);
       toast('ok', T.ok_deleted);
@@ -89,6 +99,25 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
             + {T.add}
           </button>
         )}
+      </div>
+      <div className="filters filters-3" role="search">
+        <input type="search" aria-label={T.searchEvidence} placeholder={T.searchEvidence} value={filter.q} maxLength={100} onChange={(e) => setFilter({ ...filter, q: e.target.value })} />
+        <select aria-label={T.type} value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value as EvidenceType | '' })}>
+          <option value="">{T.allTypes}</option>
+          {(Object.keys(EVIDENCE_TYPE) as EvidenceType[]).map((k) => (
+            <option key={k} value={k}>
+              {EVIDENCE_TYPE[k]}
+            </option>
+          ))}
+        </select>
+        <select aria-label={T.verification} value={filter.verification} onChange={(e) => setFilter({ ...filter, verification: e.target.value as Verification | '' })}>
+          <option value="">{T.anyVerification}</option>
+          {(Object.keys(VERIFICATION) as Verification[]).map((k) => (
+            <option key={k} value={k}>
+              {VERIFICATION[k]}
+            </option>
+          ))}
+        </select>
       </div>
       {draft && (
         <form className="form subpanel" onSubmit={save} noValidate>
@@ -113,7 +142,7 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
               </select>
             </Field>
           </div>
-          <Field label={T.content}>
+          <Field label={T.content} extra={<CharCounter value={draft.content} max={5000} />}>
             <textarea value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} rows={3} maxLength={5000} />
           </Field>
           <div className="grid-2">
@@ -130,7 +159,7 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
             </Field>
           )}
           <div className="row-end">
-            <button type="button" className="btn btn-ghost" onClick={() => setDraft(null)}>
+            <button type="button" className="btn btn-ghost" onClick={() => void guard(dirty).then((ok) => ok && setDraft(null))}>
               {T.cancel}
             </button>
             <button className="btn btn-primary" disabled={busy}>
@@ -144,7 +173,7 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
       ) : !list.data ? (
         <Loading />
       ) : list.data.length === 0 ? (
-        <Empty>{T.noEvidence}</Empty>
+        <Empty>{filter.q || filter.type || filter.verification ? T.nothingFound : T.noEvidence}</Empty>
       ) : (
         <ul className="items">
           {list.data.map((e) => (

@@ -25,6 +25,9 @@ export function Shell({ children, mock }: { children: ReactNode; mock: boolean }
   const { user, signOut } = useAuth();
   return (
     <div className="shell">
+      <a className="skip-link" href="#main">
+        {T.skipToContent}
+      </a>
       <header className="topbar">
         <Logo />
         {mock && <span className="badge-demo">{T.demoBadge}</span>}
@@ -35,10 +38,10 @@ export function Shell({ children, mock }: { children: ReactNode; mock: boolean }
               {user.role === 'admin' && <NavLink to="/admin">{T.admin}</NavLink>}
             </nav>
             <div className="who">
-              <span className="who-name">
+              <Link to="/profile" className="who-name" title={T.profile}>
                 {user.name}
                 <small>{user.role === 'admin' ? 'Администратор' : 'Следователь'}</small>
-              </span>
+              </Link>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>
                 {T.logout}
               </button>
@@ -46,7 +49,9 @@ export function Shell({ children, mock }: { children: ReactNode; mock: boolean }
           </>
         )}
       </header>
-      <main className="main">{children}</main>
+      <main className="main" id="main" tabIndex={-1}>
+        {children}
+      </main>
     </div>
   );
 }
@@ -94,12 +99,20 @@ export function VerificationPill({ value }: { value: Verification }) {
   return <span className={`pill verify-${value}`}>{VERIFICATION[value]}</span>;
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
+export function Field({ label, children, extra }: { label: string; children: ReactNode; extra?: ReactNode }) {
+  const field = (
     <label className="field">
       <span>{label}</span>
       {children}
     </label>
+  );
+  return extra ? (
+    <div className="field-wrap">
+      {field}
+      {extra}
+    </div>
+  ) : (
+    field
   );
 }
 

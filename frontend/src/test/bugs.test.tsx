@@ -23,7 +23,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('#30 report list row', () => {
   it('separates the date link from the author', async () => {
-    const api = { listReports: async () => [{ id: 7, caseId: 1, createdAt: '2026-10-20T09:14:00Z', createdBy: 1, createdByName: 'Айгерим Нурланова' }] };
+    const api = { listReports: async () => [{ id: 7, caseId: 1, createdAt: '2026-10-20T09:14:00Z', createdBy: 1, createdByName: 'Айгерим Нурланова', riskScore: 65, riskLevel: 'high' as const }] };
     wrap(api, <ReportsTab caseData={caseData} editable owner onChanged={() => {}} />);
     const row = await screen.findByTestId('report-row');
     expect(row.textContent).toMatch(/\d{2}:\d{2} · Составил: Айгерим Нурланова/);

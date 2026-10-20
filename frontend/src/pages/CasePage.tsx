@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { EntitiesTab } from '../components/EntitiesTab';
 import { EvidenceTab } from '../components/EvidenceTab';
 import { GraphTab } from '../components/GraphTab';
 import { ReportsTab } from '../components/ReportsTab';
 import { RiskTab } from '../components/RiskTab';
+import { CharCounter, saveDownload, useTitle } from '../components/kit';
 import { ErrorBox, Field, FormError, Loading, RiskBadge, StatusPill, VerificationPill } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { date, dateTime } from '../lib/format';
@@ -32,6 +33,7 @@ export interface CaseTabProps {
   /** The signed-in user owns the case. */
   owner: boolean;
   onChanged(): void;
+  openTab?(tab: Tab): void;
 }
 
 export function CasePage() {
@@ -45,6 +47,14 @@ export function CasePage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: '', description: '' });
   const [error, setError] = useState<string | null>(null);
+  const [tagDraft, setTagDraft] = useState('');
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
+  useTitle(c.data?.title ?? T.cases);
+
+  // #75 keep the active tab visible on narrow screens.
+  useEffect(() => {
+    tabRefs.current[tab]?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [tab, c.data?.id]);
 
   if (c.error) {
     return c.error.code === 'not_found' ? (
@@ -84,7 +94,30 @@ export function CasePage() {
     }
   };
 
-  const props: CaseTabProps = { caseData: data, editable, owner, onChanged: c.reload };
+  const props: CaseTabProps = { caseData: data, editable, owner, onChanged: c.reload, openTab: (t) => setParams({ tab: t }, { replace: true }) };
+
+  const saveTags = async (tags: string[]) => {
+    try {
+      await api.updateCase(data.id, { tags });
+      setTagDraft('');
+      c.reload();
+    } catch (err) {
+      toast('err', t(errorKey(err)));
+    }
+  };
+  const onTagKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && tagDraft.trim()) {
+      e.preventDefault();
+      void saveTags([...data.tags, tagDraft]);
+    }
+  };
+  const doExport = async (kind: 'json' | 'csv') => {
+    try {
+      saveDownload(kind === 'json' ? await api.exportCase(data.id) : await api.exportEvidenceCsv(data.id));
+    } catch (err) {
+      toast('err', t(errorKey(err)));
+    }
+  };
 
   return (
     <>
@@ -98,7 +131,7 @@ export function CasePage() {
             <Field label={T.title}>
               <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} maxLength={120} />
             </Field>
-            <Field label={T.description}>
+            <Field label={T.description} extra={<CharCounter value={form.description} max={2000} />}>
               <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} maxLength={2000} />
             </Field>
             <div className="row-end">
@@ -143,6 +176,37 @@ export function CasePage() {
             </select>
           )}
         </div>
+        <div className="tag-row" aria-label={T.tags}>
+          {data.tags.map((tag) => (
+            <span className="tag" key={tag}>
+              #{tag}
+              {editable && (
+                <button type="button" className="tag-x" aria-label={`${T.removeTag} ${tag}`} onClick={() => void saveTags(data.tags.filter((x) => x !== tag))}>
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+          {editable && data.tags.length < 10 && (
+            <input
+              className="tag-input"
+              aria-label={T.addTag}
+              placeholder={T.addTag}
+              value={tagDraft}
+              maxLength={30}
+              onChange={(e) => setTagDraft(e.target.value)}
+              onKeyDown={onTagKey}
+            />
+          )}
+        </div>
+        <div className="row-start">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void doExport('json')}>
+            {T.exportJson}
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void doExport('csv')}>
+            {T.exportCsv}
+          </button>
+        </div>
         {owner && locked && <div className="notice">{T.locked}</div>}
         {!owner && <div className="notice">{T.readOnly}</div>}
       </section>
@@ -153,6 +217,11 @@ export function CasePage() {
             type="button"
             role="tab"
             key={tb}
+            id={`tab-${tb}`}
+            aria-controls="tab-panel"
+            ref={(el) => {
+              tabRefs.current[tb] = el;
+            }}
             aria-selected={tab === tb}
             className={tab === tb ? 'is-active' : ''}
             onClick={() => setParams({ tab: tb }, { replace: true })}
@@ -164,7 +233,7 @@ export function CasePage() {
         ))}
       </nav>
 
-      <section className="panel">
+      <section className="panel" role="tabpanel" id="tab-panel" aria-labelledby={`tab-${tab}`}>
         {tab === 'overview' && <Overview {...props} />}
         {tab === 'evidence' && <EvidenceTab {...props} />}
         {tab === 'entities' && <EntitiesTab {...props} />}
@@ -176,11 +245,50 @@ export function CasePage() {
   );
 }
 
-function Overview({ caseData }: CaseTabProps) {
+function Overview({ caseData, editable, onChanged, openTab }: CaseTabProps) {
   const api = useApi();
+  const toast = useToast();
   const evidence = useAsync(() => api.listEvidence(caseData.id), [api, caseData.id, caseData.updatedAt]);
+  const [notes, setNotes] = useState(caseData.notes ?? '');
+  const saveNotes = async () => {
+    try {
+      await api.updateCase(caseData.id, { notes });
+      toast('ok', T.ok_saved);
+      onChanged();
+    } catch (err) {
+      toast('err', t(errorKey(err)));
+    }
+  };
+  const empty = caseData.evidenceCount === 0 && caseData.entityCount === 0;
   return (
     <>
+      {empty && editable && (
+        <div className="checklist" data-testid="checklist">
+          <h2>{T.startHere}</h2>
+          <ol>
+            <li>
+              <button type="button" className="link" onClick={() => openTab?.('evidence')}>
+                {T.step1}
+              </button>
+            </li>
+            <li>
+              <button type="button" className="link" onClick={() => openTab?.('entities')}>
+                {T.step2}
+              </button>
+            </li>
+            <li>
+              <button type="button" className="link" onClick={() => openTab?.('entities')}>
+                {T.step3}
+              </button>
+            </li>
+            <li>
+              <button type="button" className="link" onClick={() => openTab?.('risk')}>
+                {T.step4}
+              </button>
+            </li>
+          </ol>
+        </div>
+      )}
       <div className="stats-row">
         <div className="stat">
           <b>{caseData.evidenceCount}</b>
@@ -199,6 +307,17 @@ function Overview({ caseData }: CaseTabProps) {
           {T.risk}
         </div>
       </div>
+      <h2>{T.notes}</h2>
+      <Field label={T.notes} extra={<CharCounter value={notes} max={5000} />}>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} maxLength={5000} readOnly={!editable} />
+      </Field>
+      {editable && (
+        <div className="row-end">
+          <button type="button" className="btn btn-ghost btn-sm" disabled={notes === (caseData.notes ?? '')} onClick={() => void saveNotes()}>
+            {T.saveNotes}
+          </button>
+        </div>
+      )}
       <h2>{T.timeline}</h2>
       {evidence.error ? (
         <ErrorBox error={evidence.error} onRetry={evidence.reload} />
