@@ -1,0 +1,600 @@
+openapi: 3.1.0
+info:
+  title: Re:Trace API
+  version: 1.0.0
+  description: |
+    Organise investigations of suspected online scams.
+    Access: an investigator sees only their own cases — another investigator's case answers 404 so
+    its existence is not revealed. Admins can read every case but get 403 when they try to change
+    someone else's case. Closed or archived cases answer 409 `case_locked` to content changes.
+    A risk score is an indicator, never proof.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      summary: Create an investigator account and sign in
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email: { type: string, format: email, maxLength: 120 }
+                password: { type: string, minLength: 8, maxLength: 200 }
+                name: { type: string, minLength: 2, maxLength: 80 }
+      responses:
+        '201': { description: Registered, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /auth/login:
+    post:
+      summary: Sign in with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200': { description: Signed in, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      summary: End the session
+      responses:
+        '204': { description: Signed out }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /me:
+    get:
+      summary: Current user
+      responses:
+        '200': { description: User, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /cases:
+    get:
+      summary: The caller's cases
+      parameters:
+        - { $ref: '#/components/parameters/Q' }
+        - { $ref: '#/components/parameters/Status' }
+        - { $ref: '#/components/parameters/Sort' }
+      responses:
+        '200': { description: Cases, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CaseSummary' } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      summary: Open a case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, minLength: 3, maxLength: 120 }
+                description: { type: string, maxLength: 2000 }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/CaseSummary' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /cases/{caseId}:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: One case with counts and risk summary
+      responses:
+        '200': { description: Case, content: { application/json: { schema: { $ref: '#/components/schemas/CaseSummary' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: Change title, description or status (status alone is allowed on a locked case)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, minLength: 3, maxLength: 120 }
+                description: { type: string, maxLength: 2000 }
+                status: { $ref: '#/components/schemas/CaseStatus' }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/CaseSummary' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /cases/{caseId}/evidence:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Evidence of a case, by observed date
+      responses:
+        '200': { description: Evidence, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Evidence' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Add evidence
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EvidenceInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Evidence' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /cases/{caseId}/evidence/{itemId}:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }]
+    patch:
+      summary: Change evidence
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EvidencePatch' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Evidence' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      summary: Delete evidence (also removed from relationships' support lists)
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /cases/{caseId}/entities:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Entities of a case
+      responses:
+        '200': { description: Entities, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Entity' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Add an entity
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EntityInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Entity' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /cases/{caseId}/entities/{itemId}:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }]
+    patch:
+      summary: Change an entity
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EntityPatch' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Entity' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      summary: Delete an entity and its relationships
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /cases/{caseId}/relationships:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Relationships of a case
+      responses:
+        '200': { description: Relationships, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Relationship' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Link two different entities of the case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceId, targetId, type]
+              properties:
+                sourceId: { type: integer }
+                targetId: { type: integer }
+                type: { $ref: '#/components/schemas/RelationshipType' }
+                evidenceIds: { type: array, items: { type: integer } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Relationship' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /cases/{caseId}/relationships/{itemId}:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }]
+    delete:
+      summary: Delete a relationship
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /cases/{caseId}/graph:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Nodes and edges for the relationship graph
+      responses:
+        '200': { description: Graph, content: { application/json: { schema: { $ref: '#/components/schemas/Graph' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cases/{caseId}/risk:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Explainable risk assessment (deterministic rules)
+      responses:
+        '200': { description: Risk, content: { application/json: { schema: { $ref: '#/components/schemas/Risk' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cases/{caseId}/reports:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Reports of a case, newest first
+      responses:
+        '200': { description: Reports, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ReportSummary' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Generate an immutable snapshot report (owner only)
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Report' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cases/{caseId}/reports/{itemId}:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }]
+    get:
+      summary: One report with its snapshot
+      responses:
+        '200': { description: Report, content: { application/json: { schema: { $ref: '#/components/schemas/Report' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/stats:
+    get:
+      summary: System statistics (admin)
+      responses:
+        '200': { description: Stats, content: { application/json: { schema: { $ref: '#/components/schemas/AdminStats' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/cases:
+    get:
+      summary: All cases (admin)
+      parameters:
+        - { $ref: '#/components/parameters/Q' }
+        - { $ref: '#/components/parameters/Status' }
+        - { $ref: '#/components/parameters/Sort' }
+      responses:
+        '200': { description: Cases, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CaseSummary' } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/users:
+    get:
+      summary: All users (admin)
+      responses:
+        '200': { description: Users, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/User' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/users/{itemId}:
+    parameters: [{ $ref: '#/components/parameters/ItemId' }]
+    patch:
+      summary: Change a user's role; the last admin cannot be demoted
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties: { role: { $ref: '#/components/schemas/Role' } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /admin/audit-events:
+    get:
+      summary: Audit log, newest first (admin)
+      parameters:
+        - { name: caseId, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        '200': { description: Events, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+
+  parameters:
+    CaseId: { name: caseId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    ItemId: { name: itemId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    Q: { name: q, in: query, description: 'Case-insensitive search in title and description', schema: { type: string, maxLength: 100 } }
+    Status: { name: status, in: query, schema: { $ref: '#/components/schemas/CaseStatus' } }
+    Sort: { name: sort, in: query, schema: { type: string, enum: [updated, created, title, risk], default: updated } }
+
+  responses:
+    BadRequest: { description: 'validation_error, invalid_relationship', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Unauthorized: { description: 'unauthorized, invalid_credentials', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Forbidden: { description: forbidden, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: not_found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Conflict: { description: 'email_taken, case_locked, last_admin', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, enum: [validation_error, unauthorized, invalid_credentials, email_taken, forbidden, not_found, case_locked, invalid_relationship, last_admin, server_error] }
+            message: { type: string }
+
+    Role: { type: string, enum: [investigator, admin] }
+    CaseStatus: { type: string, enum: [open, in_review, closed, archived] }
+    EvidenceType: { type: string, enum: [message, link, account, payment, observation] }
+    Verification: { type: string, enum: [unverified, confirmed, disputed] }
+    EntityType: { type: string, enum: [person, account, phone, link, card, wallet, organization] }
+    RelationshipType: { type: string, enum: [contacted, paid, owns, links_to, same_as] }
+    RiskLevel: { type: string, enum: [low, medium, high] }
+
+    User:
+      type: object
+      required: [id, email, name, role, createdAt]
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        createdAt: { type: string, format: date-time }
+
+    Session:
+      type: object
+      required: [token, user]
+      properties:
+        token: { type: string, minLength: 32 }
+        user: { $ref: '#/components/schemas/User' }
+
+    CaseSummary:
+      type: object
+      required: [id, title, description, status, ownerId, ownerName, createdAt, updatedAt, evidenceCount, entityCount, relationshipCount, riskScore, riskLevel]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: '#/components/schemas/CaseStatus' }
+        ownerId: { type: integer }
+        ownerName: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        evidenceCount: { type: integer, minimum: 0 }
+        entityCount: { type: integer, minimum: 0 }
+        relationshipCount: { type: integer, minimum: 0 }
+        riskScore: { type: integer, minimum: 0, maximum: 100 }
+        riskLevel: { $ref: '#/components/schemas/RiskLevel' }
+
+    Evidence:
+      type: object
+      required: [id, caseId, type, content, source, observedOn, amount, verification, createdAt]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        type: { $ref: '#/components/schemas/EvidenceType' }
+        content: { type: string }
+        source: { type: [string, 'null'] }
+        observedOn: { type: [string, 'null'], format: date }
+        amount: { type: [integer, 'null'], minimum: 0 }
+        verification: { $ref: '#/components/schemas/Verification' }
+        createdAt: { type: string, format: date-time }
+
+    EvidenceInput:
+      type: object
+      required: [type, content]
+      properties:
+        type: { $ref: '#/components/schemas/EvidenceType' }
+        content: { type: string, minLength: 1, maxLength: 5000 }
+        source: { type: [string, 'null'], maxLength: 200 }
+        observedOn: { type: [string, 'null'], format: date }
+        amount: { type: [integer, 'null'], minimum: 0 }
+        verification: { $ref: '#/components/schemas/Verification' }
+
+    EvidencePatch:
+      type: object
+      properties:
+        type: { $ref: '#/components/schemas/EvidenceType' }
+        content: { type: string, minLength: 1, maxLength: 5000 }
+        source: { type: [string, 'null'], maxLength: 200 }
+        observedOn: { type: [string, 'null'], format: date }
+        amount: { type: [integer, 'null'], minimum: 0 }
+        verification: { $ref: '#/components/schemas/Verification' }
+
+    Entity:
+      type: object
+      required: [id, caseId, type, label, note]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        type: { $ref: '#/components/schemas/EntityType' }
+        label: { type: string }
+        note: { type: [string, 'null'] }
+
+    EntityInput:
+      type: object
+      required: [type, label]
+      properties:
+        type: { $ref: '#/components/schemas/EntityType' }
+        label: { type: string, minLength: 1, maxLength: 200 }
+        note: { type: [string, 'null'], maxLength: 1000 }
+
+    EntityPatch:
+      type: object
+      properties:
+        type: { $ref: '#/components/schemas/EntityType' }
+        label: { type: string, minLength: 1, maxLength: 200 }
+        note: { type: [string, 'null'], maxLength: 1000 }
+
+    Relationship:
+      type: object
+      required: [id, caseId, sourceId, targetId, type, evidenceIds]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        sourceId: { type: integer }
+        targetId: { type: integer }
+        type: { $ref: '#/components/schemas/RelationshipType' }
+        evidenceIds: { type: array, items: { type: integer } }
+
+    Graph:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          items:
+            type: object
+            required: [id, type, label, degree]
+            properties:
+              id: { type: integer }
+              type: { $ref: '#/components/schemas/EntityType' }
+              label: { type: string }
+              degree: { type: integer, minimum: 0 }
+        edges:
+          type: array
+          items:
+            type: object
+            required: [id, sourceId, targetId, type, evidenceCount]
+            properties:
+              id: { type: integer }
+              sourceId: { type: integer }
+              targetId: { type: integer }
+              type: { $ref: '#/components/schemas/RelationshipType' }
+              evidenceCount: { type: integer, minimum: 0 }
+
+    Risk:
+      type: object
+      required: [score, level, basedOnlyOnUnverified, rules]
+      properties:
+        score: { type: integer, minimum: 0, maximum: 100 }
+        level: { $ref: '#/components/schemas/RiskLevel' }
+        basedOnlyOnUnverified: { type: boolean }
+        rules:
+          type: array
+          items:
+            type: object
+            required: [id, weight, refs]
+            properties:
+              id: { type: string, enum: [credential_request, urgent_payment, suspicious_link, personal_payment, hub_entity, disputed_evidence] }
+              weight: { type: integer }
+              refs:
+                type: array
+                items:
+                  type: object
+                  required: [kind, id, label]
+                  properties:
+                    kind: { type: string, enum: [evidence, entity] }
+                    id: { type: integer }
+                    label: { type: string }
+                    detail: { type: string }
+
+    ReportSummary:
+      type: object
+      required: [id, caseId, createdAt, createdBy, createdByName]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: integer }
+        createdByName: { type: [string, 'null'] }
+
+    Report:
+      allOf:
+        - $ref: '#/components/schemas/ReportSummary'
+        - type: object
+          required: [snapshot]
+          properties:
+            snapshot:
+              type: object
+              required: [case, evidence, entities, relationships, risk]
+              properties:
+                case: { $ref: '#/components/schemas/CaseSummary' }
+                evidence: { type: array, items: { $ref: '#/components/schemas/Evidence' } }
+                entities: { type: array, items: { $ref: '#/components/schemas/Entity' } }
+                relationships: { type: array, items: { $ref: '#/components/schemas/Relationship' } }
+                risk: { $ref: '#/components/schemas/Risk' }
+
+    AdminStats:
+      type: object
+      required: [users, cases, casesByStatus, evidence, highRiskCases]
+      properties:
+        users: { type: integer }
+        cases: { type: integer }
+        casesByStatus:
+          type: object
+          required: [open, in_review, closed, archived]
+          properties:
+            open: { type: integer }
+            in_review: { type: integer }
+            closed: { type: integer }
+            archived: { type: integer }
+        evidence: { type: integer }
+        highRiskCases: { type: integer }
+
+    AuditEvent:
+      type: object
+      required: [id, at, actorId, actorName, action, resourceType, resourceId, caseId]
+      properties:
+        id: { type: integer }
+        at: { type: string, format: date-time }
+        actorId: { type: [integer, 'null'] }
+        actorName: { type: [string, 'null'] }
+        action: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: [integer, 'null'] }
+        caseId: { type: [integer, 'null'] }

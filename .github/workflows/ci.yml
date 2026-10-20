@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    name: Node ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Validate OpenAPI contract
+        run: npm run validate:api
+      - name: Backend tests (memory + SQLite, contract, access, persistence)
+        run: npm test -w backend
+      - name: Frontend tests
+        run: npm test -w frontend
+      - name: Frontend typecheck and build
+        run: npm run build

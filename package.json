@@ -1,0 +1,20 @@
+{
+  "name": "retrace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Re:Trace \u2014 organise investigations of suspected online scams",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "npm run dev -w backend & npm run dev -w frontend",
+    "build": "npm run build -w frontend",
+    "start": "npm start -w backend",
+    "test": "npm test -w backend && npm test -w frontend",
+    "validate:api": "npm run validate:api -w backend"
+  }
+}

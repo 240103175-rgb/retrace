@@ -21,12 +21,26 @@ npm run validate:api   # validate openapi.yml
 
 Demo accounts (synthetic, see `backend/src/seedData.js`): investigator `aigerim@retrace.test`, admin `admin@retrace.test`, password `demo-password`.
 
+## Where things are
+
+| Path | What |
+|---|---|
+| `openapi.yml` | API contract — change it first, then the code |
+| `backend/src/domain/services.js` | Business rules and access control (also used by the frontend mock) |
+| `backend/src/domain/risk.js` | Risk rules |
+| `backend/src/repositories/` | `memory.js` and `sql.js` (Sequelize) — same interface |
+| `backend/src/app.js` | Routes and JSON errors |
+| `frontend/src/services/` | `RetraceApi`, `mockService`, `httpService` |
+| `frontend/src/pages/`, `components/` | Screens |
+| `frontend/src/lib/text.ts` | All UI text (Russian) |
+
 ## Docs
 
 - `_docs/plan.md` — goals, scope, business rules (§4 is the source of truth).
 - `_docs/process.md` — how issues move: groom → test cases → implement → QA engineer verifies and closes.
 - `_docs/task-template.md` — the issue format.
 - `_docs/design-system.md` — design references and tokens.
+- `_docs/architecture.md`, `_docs/test-plan.md` — layers, data model, tests.
 - `_docs/team/pm.md`, `_docs/team/qa.md`, `_docs/team/software-engineer.md`, `_docs/team/qa-engineer.md` — role instructions.
 
 If you were not told your role, ask before doing anything.
