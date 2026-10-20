@@ -5,7 +5,7 @@ import { EvidenceTab } from '../components/EvidenceTab';
 import { GraphTab } from '../components/GraphTab';
 import { ReportsTab } from '../components/ReportsTab';
 import { RiskTab } from '../components/RiskTab';
-import { CharCounter, saveDownload, useTitle } from '../components/kit';
+import { CharCounter, hasUnsavedForms, saveDownload, useDiscardGuard, useTitle } from '../components/kit';
 import { ErrorBox, Field, FormError, Loading, RiskBadge, StatusPill, VerificationPill } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { date, dateTime } from '../lib/format';
@@ -96,6 +96,7 @@ export function CasePage() {
 
   const props: CaseTabProps = { caseData: data, editable, owner, onChanged: c.reload, openTab: (t) => setParams({ tab: t }, { replace: true }) };
 
+  const guard = useDiscardGuard();
   const saveTags = async (tags: string[]) => {
     try {
       await api.updateCase(data.id, { tags });
@@ -108,6 +109,7 @@ export function CasePage() {
   const onTagKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && tagDraft.trim()) {
       e.preventDefault();
+      if (data.tags.includes(tagDraft.trim().toLocaleLowerCase())) return setTagDraft(''); // #101 nothing to save
       void saveTags([...data.tags, tagDraft]);
     }
   };
@@ -224,7 +226,7 @@ export function CasePage() {
             }}
             aria-selected={tab === tb}
             className={tab === tb ? 'is-active' : ''}
-            onClick={() => setParams({ tab: tb }, { replace: true })}
+            onClick={() => void guard(tb !== tab && hasUnsavedForms()).then((ok) => ok && setParams({ tab: tb }, { replace: true }))}
           >
             {TAB_LABEL[tb]}
             {tb === 'evidence' && <span className="count">{data.evidenceCount}</span>}

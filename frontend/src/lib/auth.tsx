@@ -9,6 +9,8 @@ interface AuthValue {
   checking: boolean;
   /** True after the API rejected our token mid-session (#78). */
   expired: boolean;
+  /** True after the user pressed «Выйти»: the next sign-in starts fresh (#99). */
+  signedOut: boolean;
   signIn(session: Session): void;
   signOut(): Promise<void>;
   setUser(user: User): void;
@@ -37,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(() => Boolean(read()));
   const [expired, setExpired] = useState(false);
+  const [signedOut, setSignedOut] = useState(false);
 
   useEffect(() => {
     api.onUnauthorized(() => {
@@ -67,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       api.setToken(session.token);
       write(session.token);
       setExpired(false);
+      setSignedOut(false);
       setUser(session.user);
     },
     [api],
@@ -78,11 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       api.setToken(null);
       write(null);
+      setSignedOut(true);
       setUser(null);
     }
   }, [api]);
 
-  const value = useMemo(() => ({ user, checking, expired, signIn, signOut, setUser }), [user, checking, expired, signIn, signOut]);
+  const value = useMemo(() => ({ user, checking, expired, signedOut, signIn, signOut, setUser }), [user, checking, expired, signedOut, signIn, signOut]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

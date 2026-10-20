@@ -14,7 +14,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/). Issues refer to https:/
 - Confirmed evidence requires a source (#49); duplicate entities and relationships are refused (#45, #46).
 
 ### Fixed
-- Bugs found in the v1.1 test session (#96 and linked `user-test-bug` issues).
+- Found in the v1.1 test session (#96): form errors now name the field (#97), switching case tabs asks before dropping an unsaved form (#98), sign-out no longer sends the next user to the previous user's page (#99), Russian plural forms (#100), re-adding an existing tag saves nothing (#101), profile reachable on phones (#102), no React Router warnings (#103).
 
 ## [1.0.0] — 2026-10-20
 

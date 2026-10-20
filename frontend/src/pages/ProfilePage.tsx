@@ -21,6 +21,7 @@ export function ProfilePage() {
   const saveName = async (e: FormEvent) => {
     e.preventDefault();
     setNameError(null);
+    if (name.trim().length < 2) return setNameError(T.nameLength);
     try {
       setUser(await api.updateMe({ name }));
       toast('ok', T.ok_saved);

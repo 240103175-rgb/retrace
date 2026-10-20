@@ -24,7 +24,7 @@ How Re:Trace was built, in order. Commits and issues: https://github.com/2401031
 | B — domain features | evidence filters, duplicates, tags, notes, source rule, two new risk rules, report scores, export, profile, disable users, audit filters, 7-day stats | #44–#60 |
 | C — frontend | UI for group B plus graph legend/focus, confirm dialog, titles, counters, copy, session expiry, unsaved warning, manifest, a11y, error boundary | #61–#83 |
 | D — quality and docs | smoke test, request-body contract checks, coverage, API guide, decisions, this log, threat model, user guide, changelog, templates, release checklist, doc refresh | #84–#95 |
-| E — test session 2 | Browser session on v1.1; findings filed as `user-test-bug` | #96 + linked |
+| E — test session 2 | Browser session on v1.1 (desktop + 375 px) found 7 real bugs, each fixed with a regression test | #96, #97–#103 |
 
 ## Problems worth remembering
 

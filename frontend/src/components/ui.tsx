@@ -42,6 +42,9 @@ export function Shell({ children, mock }: { children: ReactNode; mock: boolean }
                 {user.name}
                 <small>{user.role === 'admin' ? 'Администратор' : 'Следователь'}</small>
               </Link>
+              <Link to="/profile" className="who-icon" aria-label={T.profile} title={T.profile}>
+                <span aria-hidden="true">👤</span>
+              </Link>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>
                 {T.logout}
               </button>

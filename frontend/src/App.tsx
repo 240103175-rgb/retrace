@@ -15,10 +15,10 @@ import type { RetraceApi } from './services/api';
 import { ApiProvider } from './services/ApiContext';
 
 function RequireUser({ admin = false, children }: { admin?: boolean; children: ReactNode }) {
-  const { user, checking } = useAuth();
+  const { user, checking, signedOut } = useAuth();
   const location = useLocation();
   if (checking) return <Loading />;
-  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  if (!user) return <Navigate to={signedOut ? '/login' : `/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   if (admin && user.role !== 'admin') {
     return (
       <section className="panel center">
@@ -67,5 +67,5 @@ export function App({ api, mock, router = true }: { api: RetraceApi; mock: boole
       </ToastProvider>
     </ApiProvider>
   );
-  return router ? <BrowserRouter>{tree}</BrowserRouter> : tree;
+  return router ? <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{tree}</BrowserRouter> : tree;
 }

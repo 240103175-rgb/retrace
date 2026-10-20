@@ -306,3 +306,7 @@ textarea { resize: vertical; }
   .filters-3, .filters-2 { grid-template-columns: 1fr; }
 }
 .field-wrap { display: grid; gap: 2px; }
+
+/* #102 profile link on phones (name block is hidden there) */
+.who-icon { display: none; place-items: center; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 8px; text-decoration: none; }
+@media (max-width: 760px) { .who-icon { display: inline-grid; } }

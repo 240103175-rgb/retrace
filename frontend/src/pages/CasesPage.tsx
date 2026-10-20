@@ -3,8 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { CharCounter, useTitle } from '../components/kit';
 import { Empty, ErrorBox, Field, FormError, Loading, RiskBadge, StatusPill } from '../components/ui';
 import { useToast } from '../lib/toast';
-import { dateTime } from '../lib/format';
-import { STATUS, T, t } from '../lib/text';
+import { dateTime, plural } from '../lib/format';
+import { EVIDENCE_FORMS, STATUS, T, t } from '../lib/text';
 import { errorKey, useAsync } from '../lib/useAsync';
 import { useApi } from '../services/ApiContext';
 import type { CaseSort, CaseStatus, CaseSummary } from '../services/types';
@@ -18,7 +18,7 @@ export function CaseTable({ cases, showOwner = false, onTag }: { cases: CaseSumm
             <div className="case-main">
               <strong>{c.title}</strong>
               <span className="muted">
-                {c.evidenceCount} {T.evidenceCount} · {T.updated} {dateTime(c.updatedAt)}
+                {c.evidenceCount} {plural(c.evidenceCount, EVIDENCE_FORMS)} · {T.updated} {dateTime(c.updatedAt)}
                 {showOwner && ` · ${c.ownerName}`}
               </span>
               {c.tags.length > 0 && (

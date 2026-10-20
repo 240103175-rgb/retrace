@@ -5,3 +5,11 @@ export const date = (iso: string) => {
   return `${d}.${m}.${y}`;
 };
 export const money = (n: number) => `${n.toLocaleString('ru-RU')} ₸`;
+/** Russian plural form for n: [1, 2–4, 5+] (#100). */
+export const plural = (n: number, forms: readonly [string, string, string]) => {
+  const d = Math.abs(n) % 100;
+  if (d >= 11 && d <= 14) return forms[2];
+  if (d % 10 === 1) return forms[0];
+  if (d % 10 >= 2 && d % 10 <= 4) return forms[1];
+  return forms[2];
+};

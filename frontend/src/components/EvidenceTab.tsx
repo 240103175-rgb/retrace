@@ -54,6 +54,10 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
       setError('Содержание: от 1 до 5000 символов');
       return;
     }
+    if (draft.verification === 'confirmed' && !draft.source.trim()) {
+      setError(T.sourceRequired);
+      return;
+    }
     setBusy(true);
     setError(null);
     const body = {

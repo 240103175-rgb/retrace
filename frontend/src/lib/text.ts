@@ -34,7 +34,6 @@ export const T = {
   sortRisk: 'По риску',
   noCases: 'Дел пока нет. Создайте первое дело.',
   nothingFound: 'Ничего не найдено. Измените поиск или фильтр.',
-  evidenceCount: 'доказательств',
   updated: 'Обновлено',
   owner: 'Владелец',
   loading: 'Загрузка…',
@@ -115,6 +114,8 @@ export const T = {
   anyVerification: 'Любая проверка',
   searchEvidence: 'Поиск в доказательствах',
   profile: 'Профиль',
+  sourceRequired: 'Для статуса «Подтверждено» укажите источник',
+  nameLength: 'Имя: от 2 до 80 символов',
   changeName: 'Изменить имя',
   changePassword: 'Сменить пароль',
   currentPassword: 'Текущий пароль',
@@ -201,3 +202,6 @@ export const LINK_PROBLEM: Record<string, string> = {
   punycode: 'punycode-домен',
   lookalike: 'имитация известного бренда',
 };
+
+/** Plural forms for evidence counts: 1, 2–4, 5+ (#100). */
+export const EVIDENCE_FORMS = ['доказательство', 'доказательства', 'доказательств'] as const;

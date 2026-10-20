@@ -71,16 +71,24 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 
 export const useConfirm = () => useContext(ConfirmContext);
 
+let dirtyForms = 0;
+/** True while some mounted form has unsaved input (#98). */
+export const hasUnsavedForms = () => dirtyForms > 0;
+
 /** #79 warn before closing the tab while a form has unsaved input. */
 export function useUnsavedWarning(dirty: boolean) {
   useEffect(() => {
     if (!dirty) return;
+    dirtyForms++;
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
+    return () => {
+      dirtyForms--;
+      window.removeEventListener('beforeunload', handler);
+    };
   }, [dirty]);
 }
 
