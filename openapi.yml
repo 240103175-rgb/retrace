@@ -70,6 +70,7 @@ paths:
       responses:
         '200': { description: Signed in, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/TooMany' }
         '415': { $ref: '#/components/responses/UnsupportedMedia' }
 
@@ -81,12 +82,86 @@ paths:
         '204': { description: Signed out }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /auth/logout-all:
+    post:
+      summary: End every session of the current user
+      responses:
+        '204': { description: Signed out everywhere }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /me/password:
+    post:
+      summary: Change own password; other sessions end
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { type: string, minLength: 8, maxLength: 200 }
+      responses:
+        '204': { description: Changed }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
   /me:
     get:
       summary: Current user
       responses:
         '200': { description: User, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      summary: Change own name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties: { name: { type: string, minLength: 2, maxLength: 80 } }
+      responses:
+        '200': { description: User, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
+  /cases/{caseId}/export:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Whole case as a JSON attachment
+      responses:
+        '200':
+          description: Export (Content-Disposition attachment)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [format, exportedAt, case, evidence, entities, relationships, risk, reports]
+                properties:
+                  format: { type: string, enum: [retrace-case/1] }
+                  exportedAt: { type: string, format: date-time }
+                  case: { $ref: '#/components/schemas/CaseSummary' }
+                  evidence: { type: array, items: { $ref: '#/components/schemas/Evidence' } }
+                  entities: { type: array, items: { $ref: '#/components/schemas/Entity' } }
+                  relationships: { type: array, items: { $ref: '#/components/schemas/Relationship' } }
+                  risk: { $ref: '#/components/schemas/Risk' }
+                  reports: { type: array, items: { $ref: '#/components/schemas/ReportSummary' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cases/{caseId}/evidence.csv:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Evidence as CSV (UTF-8 with BOM) attachment
+      responses:
+        '200': { description: CSV, content: { text/csv: { schema: { type: string } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /cases:
     get:
@@ -97,6 +172,7 @@ paths:
         - { $ref: '#/components/parameters/Sort' }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Offset' }
+        - { $ref: '#/components/parameters/Tag' }
       responses:
         '200': { description: Cases, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CaseSummary' } } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -140,6 +216,8 @@ paths:
                 title: { type: string, minLength: 3, maxLength: 120 }
                 description: { type: string, maxLength: 2000 }
                 status: { $ref: '#/components/schemas/CaseStatus' }
+                tags: { type: array, maxItems: 10, items: { type: string, minLength: 1, maxLength: 30 } }
+                notes: { type: [string, 'null'], maxLength: 5000 }
       responses:
         '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/CaseSummary' } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -154,8 +232,13 @@ paths:
     parameters: [{ $ref: '#/components/parameters/CaseId' }]
     get:
       summary: Evidence of a case, by observed date
+      parameters:
+        - { name: q, in: query, description: 'Text in content or source', schema: { type: string, maxLength: 100 } }
+        - { name: type, in: query, schema: { $ref: '#/components/schemas/EvidenceType' } }
+        - { name: verification, in: query, schema: { $ref: '#/components/schemas/Verification' } }
       responses:
         '200': { description: Evidence, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Evidence' } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
     post:
@@ -341,6 +424,7 @@ paths:
         - { $ref: '#/components/parameters/Sort' }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Offset' }
+        - { $ref: '#/components/parameters/Tag' }
       responses:
         '200': { description: Cases, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CaseSummary' } } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -358,15 +442,16 @@ paths:
   /admin/users/{itemId}:
     parameters: [{ $ref: '#/components/parameters/ItemId' }]
     patch:
-      summary: Change a user's role; the last admin cannot be demoted
+      summary: Change a user's role or disable the account; the last active admin cannot be demoted or disabled
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [role]
-              properties: { role: { $ref: '#/components/schemas/Role' } }
+              properties:
+                role: { $ref: '#/components/schemas/Role' }
+                disabled: { type: boolean }
       responses:
         '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -382,6 +467,8 @@ paths:
       summary: Audit log, newest first (admin)
       parameters:
         - { name: caseId, in: query, schema: { type: integer } }
+        - { name: actorId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: action, in: query, description: 'Action prefix, e.g. evidence.', schema: { type: string, maxLength: 60 } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
         - { $ref: '#/components/parameters/Offset' }
       responses:
@@ -402,15 +489,16 @@ components:
     Sort: { name: sort, in: query, schema: { type: string, enum: [updated, created, title, risk], default: updated } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 100 } }
     Offset: { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+    Tag: { name: tag, in: query, description: 'Only cases with this tag', schema: { type: string, maxLength: 30 } }
 
   responses:
-    BadRequest: { description: 'validation_error, invalid_relationship', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    BadRequest: { description: 'validation_error, invalid_relationship, wrong_password', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Unauthorized: { description: 'unauthorized, invalid_credentials', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Forbidden: { description: forbidden, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     NotFound: { description: not_found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     TooMany: { description: too_many_attempts, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     UnsupportedMedia: { description: unsupported_media_type, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-    Conflict: { description: 'email_taken, case_locked, last_admin', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Conflict: { description: 'email_taken, case_locked, last_admin, duplicate_entity, duplicate_relationship, self_action', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   schemas:
     Error:
@@ -421,7 +509,7 @@ components:
           type: object
           required: [code, message]
           properties:
-            code: { type: string, enum: [validation_error, unauthorized, invalid_credentials, email_taken, forbidden, not_found, case_locked, invalid_relationship, last_admin, too_many_attempts, unsupported_media_type, server_error] }
+            code: { type: string, enum: [validation_error, unauthorized, invalid_credentials, email_taken, forbidden, not_found, case_locked, invalid_relationship, last_admin, too_many_attempts, unsupported_media_type, duplicate_entity, duplicate_relationship, wrong_password, account_disabled, self_action, server_error] }
             message: { type: string }
 
     Role: { type: string, enum: [investigator, admin] }
@@ -434,13 +522,14 @@ components:
 
     User:
       type: object
-      required: [id, email, name, role, createdAt]
+      required: [id, email, name, role, disabled, createdAt]
       additionalProperties: false
       properties:
         id: { type: integer }
         email: { type: string }
         name: { type: string }
         role: { $ref: '#/components/schemas/Role' }
+        disabled: { type: boolean }
         createdAt: { type: string, format: date-time }
 
     Session:
@@ -452,12 +541,14 @@ components:
 
     CaseSummary:
       type: object
-      required: [id, title, description, status, ownerId, ownerName, createdAt, updatedAt, evidenceCount, entityCount, relationshipCount, riskScore, riskLevel]
+      required: [id, title, description, status, tags, notes, ownerId, ownerName, createdAt, updatedAt, evidenceCount, entityCount, relationshipCount, riskScore, riskLevel]
       properties:
         id: { type: integer }
         title: { type: string }
         description: { type: string }
         status: { $ref: '#/components/schemas/CaseStatus' }
+        tags: { type: array, maxItems: 10, items: { type: string, minLength: 1, maxLength: 30 } }
+        notes: { type: [string, 'null'] }
         ownerId: { type: integer }
         ownerName: { type: string }
         createdAt: { type: string, format: date-time }
@@ -578,7 +669,7 @@ components:
             type: object
             required: [id, weight, refs]
             properties:
-              id: { type: string, enum: [credential_request, urgent_payment, suspicious_link, personal_payment, hub_entity, disputed_evidence] }
+              id: { type: string, enum: [credential_request, urgent_payment, remote_access, suspicious_link, personal_payment, fake_prize, hub_entity, disputed_evidence] }
               weight: { type: integer }
               refs:
                 type: array
@@ -593,13 +684,15 @@ components:
 
     ReportSummary:
       type: object
-      required: [id, caseId, createdAt, createdBy, createdByName]
+      required: [id, caseId, createdAt, createdBy, createdByName, riskScore, riskLevel]
       properties:
         id: { type: integer }
         caseId: { type: integer }
         createdAt: { type: string, format: date-time }
         createdBy: { type: integer }
         createdByName: { type: [string, 'null'] }
+        riskScore: { type: integer, minimum: 0, maximum: 100 }
+        riskLevel: { $ref: '#/components/schemas/RiskLevel' }
 
     Report:
       allOf:
@@ -619,7 +712,7 @@ components:
 
     AdminStats:
       type: object
-      required: [users, cases, casesByStatus, evidence, highRiskCases]
+      required: [users, cases, casesByStatus, evidence, highRiskCases, casesLast7Days]
       properties:
         users: { type: integer }
         cases: { type: integer }
@@ -633,6 +726,7 @@ components:
             archived: { type: integer }
         evidence: { type: integer }
         highRiskCases: { type: integer }
+        casesLast7Days: { type: integer }
 
     AuditEvent:
       type: object

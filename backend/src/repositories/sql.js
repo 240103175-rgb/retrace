@@ -277,9 +277,13 @@ export async function createSqlRepository(url = process.env.DATABASE_URL || DEFA
     async addAudit(e) {
       await m.AuditEvent.create(e);
     },
-    async listAudit({ caseId = null, limit = 100, offset = 0 } = {}) {
+    async listAudit({ caseId = null, limit = 100, offset = 0, actorId = null, actionPrefix = null } = {}) {
+      const where = {};
+      if (caseId != null) where.caseId = caseId;
+      if (actorId != null) where.actorId = actorId;
+      if (actionPrefix != null) where.action = { [Op.startsWith]: actionPrefix };
       return (
-        await m.AuditEvent.findAll({ where: caseId == null ? {} : { caseId }, order: [['at', 'DESC'], ['id', 'DESC']], limit, offset })
+        await m.AuditEvent.findAll({ where, order: [['at', 'DESC'], ['id', 'DESC']], limit, offset })
       ).map(out);
     },
   };

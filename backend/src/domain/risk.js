@@ -4,8 +4,10 @@
 export const RULES = [
   { id: 'credential_request', weight: 25 },
   { id: 'urgent_payment', weight: 20 },
+  { id: 'remote_access', weight: 20 },
   { id: 'suspicious_link', weight: 20 },
   { id: 'personal_payment', weight: 15 },
+  { id: 'fake_prize', weight: 15 },
   { id: 'hub_entity', weight: 10 },
   { id: 'disputed_evidence', weight: 10 },
 ];
@@ -16,6 +18,9 @@ export const HUB_DEGREE = 3;
 const CREDENTIAL = /(код|code|парол|password|\bpin\b|пин|cvv|cvc|смс|sms)/i;
 const URGENT = /(срочно|сейчас же|немедленно|сегодня же|быстрее|только сегодня|urgent|asap|immediately)/i;
 const PAYMENT = /(предоплат|оплат|переве|перевод|внесите|заплат|деньги|pay|transfer|deposit)/i;
+const REMOTE_ACCESS = /(anydesk|teamviewer|rustdesk|quick ?support|удал[её]нн\S* доступ|демонстраци\S* экран)/i;
+const PRIZE = /(выигр|приз|лотере|розыгрыш|prize|lottery|you won)/i;
+const FEE = /(налог|комисси|пошлин|оплат|доставк|fee|tax)/i;
 const SHORTENERS = ['bit.ly', 'tinyurl.com', 'clck.ru', 'goo.gl', 't.ly', 'cutt.ly', 'is.gd', 'vk.cc'];
 const BRANDS = {
   kaspi: ['kaspi.kz'],
@@ -61,7 +66,9 @@ export function assessRisk({ evidence = [], entities = [], relationships = [] })
     if (e.type === 'message') {
       if (CREDENTIAL.test(e.content)) add('credential_request', ref);
       if (URGENT.test(e.content) && PAYMENT.test(e.content)) add('urgent_payment', ref);
+      if (PRIZE.test(e.content) && FEE.test(e.content)) add('fake_prize', ref);
     }
+    if ((e.type === 'message' || e.type === 'observation') && REMOTE_ACCESS.test(e.content)) add('remote_access', ref);
     if (e.type === 'link') {
       const problem = linkProblem(e.content);
       if (problem) add('suspicious_link', { ...ref, detail: problem });

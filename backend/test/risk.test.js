@@ -81,4 +81,19 @@ describe('risk rules', () => {
     assert.equal(assessRisk({ evidence: [ev(1, 'observation', 'x', 'confirmed')] }).basedOnlyOnUnverified, false);
     assert.equal(assessRisk({}).basedOnlyOnUnverified, true);
   });
+
+  it('#50 flags remote-access tools in messages and observations only', () => {
+    assert.deepEqual(ids(assessRisk({ evidence: [ev(1, 'message', 'Установите AnyDesk, мы поможем вернуть деньги')] })), ['remote_access']);
+    assert.deepEqual(ids(assessRisk({ evidence: [ev(1, 'observation', 'Попросили включить демонстрацию экрана')] })), ['remote_access']);
+    assert.deepEqual(ids(assessRisk({ evidence: [ev(1, 'observation', 'Нужен удаленный доступ к телефону')] })), ['remote_access']);
+    assert.deepEqual(ids(assessRisk({ evidence: [ev(1, 'link', 'https://anydesk.com/ru')] })), []);
+    assert.equal(assessRisk({ evidence: [ev(1, 'message', 'Скачайте TeamViewer')] }).score, 20);
+  });
+
+  it('#51 flags a prize that needs a payment', () => {
+    const r = assessRisk({ evidence: [ev(1, 'message', 'Вы выиграли iPhone, оплатите доставку 3 000 ₸')] });
+    assert.deepEqual(ids(r), ['fake_prize']);
+    assert.equal(r.score, 15);
+    assert.deepEqual(ids(assessRisk({ evidence: [ev(1, 'message', 'Вы выиграли!')] })), []);
+  });
 });

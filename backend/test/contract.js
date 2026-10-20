@@ -29,6 +29,7 @@ export async function loadContract() {
       if (!response) throw new Error(`${method} ${route.path}: status ${status} is not in the contract`);
       seen.add(`${method.toUpperCase()} ${route.path} ${status}`);
       const schema = response.content?.['application/json']?.schema;
+      if (!schema && response.content && Object.keys(response.content).length) return; // non-JSON body (e.g. text/csv)
       if (!schema) {
         if (body !== undefined && body !== '') throw new Error(`${method} ${route.path} ${status}: unexpected body`);
         return;

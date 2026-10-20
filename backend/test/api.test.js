@@ -34,7 +34,7 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
         body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
       });
       const text = await res.text();
-      const data = text ? JSON.parse(text) : undefined;
+      const data = !text ? undefined : res.headers.get('content-type')?.includes('json') ? JSON.parse(text) : text;
       contract.check(method, `/api/v1${path}`, res.status, data);
       return { status: res.status, data };
     }
@@ -48,6 +48,11 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       assert.equal((await call('POST', '/auth/register', { body: { email: 'x@retrace.test', password: 'short', name: 'X2' } })).status, 400);
       assert.equal((await call('POST', '/auth/login', { body: { email: 'new@retrace.test', password: 'wrong-pass' } })).data.error.code, 'invalid_credentials');
       assert.equal((await call('GET', '/me', { token: reg.data.token })).data.email, 'new@retrace.test');
+      assert.equal((await call('PATCH', '/me', { token: reg.data.token, body: { name: 'Новый Н.' } })).data.name, 'Новый Н.');
+      assert.equal((await call('POST', '/me/password', { token: reg.data.token, body: { currentPassword: 'long-enough', newPassword: 'longer-enough' } })).status, 204);
+      assert.equal((await call('POST', '/auth/logout-all', { token: reg.data.token })).status, 204);
+      assert.equal((await call('GET', '/me', { token: reg.data.token })).status, 401);
+      reg.data.token = (await call('POST', '/auth/login', { body: { email: 'new@retrace.test', password: 'longer-enough' } })).data.token;
       assert.equal((await call('POST', '/auth/logout', { token: reg.data.token })).status, 204);
       assert.equal((await call('GET', '/me', { token: reg.data.token })).status, 401);
       assert.equal((await call('GET', '/cases')).data.error.code, 'unauthorized');
@@ -60,7 +65,7 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       assert.equal((await call('GET', '/cases?sort=nope', { token: t })).status, 400);
       const c = (await call('POST', '/cases', { token: t, body: { title: 'Лотерея в Instagram', description: 'Выигрыш за «налог»' } })).data;
       assert.equal((await call('POST', '/cases', { token: t, body: { title: 'AB' } })).status, 400);
-      const m = (await call('POST', `/cases/${c.id}/evidence`, { token: t, body: { type: 'message', content: 'Срочно оплатите налог на выигрыш, пришлите код из SMS', verification: 'confirmed', observedOn: '2026-10-19' } })).data;
+      const m = (await call('POST', `/cases/${c.id}/evidence`, { token: t, body: { type: 'message', content: 'Срочно оплатите налог на выигрыш, пришлите код из SMS', source: 'Instagram Direct', verification: 'confirmed', observedOn: '2026-10-19' } })).data;
       const l = (await call('POST', `/cases/${c.id}/evidence`, { token: t, body: { type: 'link', content: 'https://bit.ly/prize-kz' } })).data;
       assert.equal((await call('PATCH', `/cases/${c.id}/evidence/${l.id}`, { token: t, body: { verification: 'disputed' } })).data.verification, 'disputed');
       const a = (await call('POST', `/cases/${c.id}/entities`, { token: t, body: { type: 'account', label: '@prize_kz' } })).data;
@@ -71,11 +76,14 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       assert.equal((await call('GET', `/cases/${c.id}/relationships`, { token: t })).data.length, 1);
       assert.equal((await call('GET', `/cases/${c.id}/graph`, { token: t })).data.edges.length, 1);
       const risk = (await call('GET', `/cases/${c.id}/risk`, { token: t })).data;
-      assert.deepEqual(risk.rules.map((x) => x.id), ['credential_request', 'urgent_payment', 'suspicious_link', 'personal_payment', 'disputed_evidence']);
-      assert.equal(risk.score, 90);
+      assert.deepEqual(risk.rules.map((x) => x.id), ['credential_request', 'urgent_payment', 'suspicious_link', 'personal_payment', 'fake_prize', 'disputed_evidence']);
+      assert.equal(risk.score, 100);
       const rep = await call('POST', `/cases/${c.id}/reports`, { token: t });
       assert.equal(rep.status, 201);
       assert.equal((await call('GET', `/cases/${c.id}/reports`, { token: t })).data.length, 1);
+      assert.equal((await call('GET', `/cases/${c.id}/reports/${rep.data.id}`, { token: t })).data.id, rep.data.id);
+      assert.equal((await call('GET', `/cases/${c.id}/export`, { token: t })).data.case.id, c.id);
+      assert.equal((await call('GET', `/cases/${c.id}/evidence.csv`, { token: t })).status, 200);
       await call('DELETE', `/cases/${c.id}/relationships/${r.id}`, { token: t });
       await call('DELETE', `/cases/${c.id}/entities/${w.id}`, { token: t });
       assert.equal((await call('DELETE', `/cases/${c.id}/evidence/${l.id}`, { token: t })).status, 204);

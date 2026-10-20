@@ -130,9 +130,11 @@ export function createMemoryRepository() {
     async addAudit(e) {
       insert(t.audit, e);
     },
-    async listAudit({ caseId = null, limit = 100, offset = 0 } = {}) {
+    async listAudit({ caseId = null, limit = 100, offset = 0, actorId = null, actionPrefix = null } = {}) {
       return t.audit
         .filter((e) => caseId == null || e.caseId === caseId)
+        .filter((e) => actorId == null || e.actorId === actorId)
+        .filter((e) => actionPrefix == null || e.action.startsWith(actionPrefix))
         .sort((a, b) => b.at - a.at || b.id - a.id)
         .slice(offset, offset + limit)
         .map(clone);

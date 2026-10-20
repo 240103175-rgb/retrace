@@ -81,12 +81,15 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
   api.use((req, _res, next) => (open.has(req.path) || req.user ? next() : next(new AppError('unauthorized', 401))));
 
   const id = (v) => Number(v);
-  const filter = (q) => ({ q: q.q ?? '', status: q.status || null, sort: q.sort || 'updated', limit: q.limit, offset: q.offset });
+  const filter = (q) => ({ q: q.q ?? '', status: q.status || null, sort: q.sort || 'updated', limit: q.limit, offset: q.offset, tag: q.tag || null });
 
   api.post('/auth/register', h(async (req, res) => res.status(201).json(await svc.register(req.body ?? {}))));
   api.post('/auth/login', h(async (req, res) => res.json(await svc.login(req.body ?? {}))));
   api.post('/auth/logout', h(async (req, res) => (await svc.logout(req.token), res.status(204).end())));
+  api.post('/auth/logout-all', h(async (req, res) => (await svc.logoutAll(req.user), res.status(204).end())));
   api.get('/me', (req, res) => res.json(userDto(req.user)));
+  api.patch('/me', h(async (req, res) => res.json(await svc.updateMe(req.user, req.body ?? {}))));
+  api.post('/me/password', h(async (req, res) => (await svc.changePassword(req.user, req.token, req.body ?? {}), res.status(204).end())));
 
   api.get('/cases', h(async (req, res) => res.json(await svc.listCases(req.user, filter(req.query)))));
   api.post('/cases', h(async (req, res) => res.status(201).json(await svc.createCase(req.user, req.body ?? {}))));
@@ -104,6 +107,16 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
       h(async (req, res) => (await svc[remove](req.user, id(req.params.caseId), id(req.params.itemId)), res.status(204).end())),
     );
   };
+  // Must come before crud('evidence') so ".csv" is not taken as an item id.
+  api.get('/cases/:caseId/evidence.csv', h(async (req, res) => {
+    const { caseId, csv } = await svc.exportEvidenceCsv(req.user, id(req.params.caseId));
+    res.set('Content-Disposition', `attachment; filename="retrace-case-${caseId}-evidence.csv"`).type('text/csv; charset=utf-8').send(csv);
+  }));
+  api.get('/cases/:caseId/export', h(async (req, res) => {
+    const data = await svc.exportCase(req.user, id(req.params.caseId));
+    res.set('Content-Disposition', `attachment; filename="retrace-case-${data.case.id}.json"`).json(data);
+  }));
+  api.get('/cases/:caseId/evidence', h(async (req, res) => res.json(await svc.listEvidence(req.user, id(req.params.caseId), { q: req.query.q, type: req.query.type || null, verification: req.query.verification || null }))));
   crud('evidence', 'listEvidence', 'createEvidence', 'updateEvidence', 'deleteEvidence');
   crud('entities', 'listEntities', 'createEntity', 'updateEntity', 'deleteEntity');
   crud('relationships', 'listRelationships', 'createRelationship', null, 'deleteRelationship');
@@ -118,7 +131,7 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
   api.get('/admin/cases', h(async (req, res) => res.json(await svc.adminCases(req.user, filter(req.query)))));
   api.get('/admin/users', h(async (req, res) => res.json(await svc.adminUsers(req.user))));
   api.patch('/admin/users/:itemId', h(async (req, res) => res.json(await svc.adminSetRole(req.user, id(req.params.itemId), req.body ?? {}))));
-  api.get('/admin/audit-events', h(async (req, res) => res.json(await svc.adminAudit(req.user, { caseId: req.query.caseId ?? null, limit: req.query.limit ?? 100, offset: req.query.offset }))));
+  api.get('/admin/audit-events', h(async (req, res) => res.json(await svc.adminAudit(req.user, { caseId: req.query.caseId ?? null, limit: req.query.limit ?? 100, offset: req.query.offset, actorId: req.query.actorId, action: req.query.action }))));
 
   api.use((_req, _res, next) => next(new AppError('not_found', 404)));
   app.use('/api/v1', api);
