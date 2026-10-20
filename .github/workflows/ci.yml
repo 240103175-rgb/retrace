@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    name: Node ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Validate OpenAPI contract
+        run: npm run validate:api
+      - name: Backend tests with coverage (memory + SQLite, contract, access, persistence)
+        run: npm run test:coverage -w backend
+      - name: Frontend tests
+        run: npm test -w frontend
+      - name: Frontend typecheck and build
+        run: npm run build
+      - name: Smoke test against the running server
+        run: |
+          STORAGE=memory PORT=3200 npm start > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:3200/api/v1/health && break; sleep 1; done
+          npm run smoke -w backend -- http://localhost:3200 || (cat server.log; exit 1)
