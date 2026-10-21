@@ -122,7 +122,8 @@ const num = (row) => {
 };
 const out = (row) => num(plain(row));
 
-export async function createSqlRepository(url = process.env.DATABASE_URL || DEFAULT_DATABASE_URL) {
+/** @param {{ reset?: boolean }} options reset drops and recreates every table (tests only). */
+export async function createSqlRepository(url = process.env.DATABASE_URL || DEFAULT_DATABASE_URL, { reset = false } = {}) {
   const storage = url.startsWith('sqlite:') ? url.slice('sqlite:'.length) : null;
   if (storage && storage !== ':memory:') mkdirSync(dirname(storage), { recursive: true });
   const sequelize = storage
@@ -130,10 +131,11 @@ export async function createSqlRepository(url = process.env.DATABASE_URL || DEFA
     : new Sequelize(url, { logging: false });
   if (sequelize.getDialect() === 'sqlite') await sequelize.query('PRAGMA foreign_keys = ON;');
   const m = defineModels(sequelize);
-  await sequelize.sync();
+  await sequelize.sync({ force: reset });
   const added = await migrate(sequelize);
   if (added.length) console.log(`Migrated database: added ${added.join(', ')}`);
 
+  let closed = false;
   const relOut = (r) => {
     const { support, ...rest } = plain(r);
     return { ...rest, evidenceIds: (support ?? []).map((s) => s.evidenceId).sort((a, b) => a - b) };
@@ -145,6 +147,8 @@ export async function createSqlRepository(url = process.env.DATABASE_URL || DEFA
     sequelize,
     models: m,
     async close() {
+      if (closed) return;
+      closed = true;
       await sequelize.close();
     },
 

@@ -47,3 +47,8 @@ Each entry: context → decision → alternatives considered → consequences.
 - **Decision:** counter per email in memory, 5 failures / 15 minutes, unknown emails counted too.
 - **Alternatives:** limit in the database or Redis.
 - **Consequences:** counters reset on restart and are not shared between instances — documented in the threat model.
+
+## 2026-10-21 — PostgreSQL verified in CI, not locally
+- **Context:** #29 needs a tested PostgreSQL profile; the development machine has no PostgreSQL or Docker.
+- **Decision:** `pg` driver; the service, feature and API suites run on a `postgres:16` service container in CI (`TEST_DATABASE_URL`), plus a smoke run of the server on PostgreSQL.
+- **Consequences:** a PostgreSQL regression shows up in CI, not in a local `npm test`.
