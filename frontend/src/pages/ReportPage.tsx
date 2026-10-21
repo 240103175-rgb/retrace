@@ -26,13 +26,28 @@ export function ReportPage() {
         <Link to={`/cases/${id}?tab=reports`} className="back">
           ← {T.back}
         </Link>
-        <button type="button" className="btn btn-primary btn-sm" onClick={() => window.print()}>
-          {T.print}
+        <button type="button" className="btn btn-primary btn-sm" title={T.pdfHint} onClick={() => printAsPdf(`retrace-case-${s.case.id}-report-${r.id}`)}>
+          {T.downloadPdf}
         </button>
       </div>
       <article className="report" data-testid="report">
         <header>
-          <p className="report-kicker">Re:Trace · {T.reportFrom} {dateTime(r.createdAt)}</p>
+          <div className="report-brand">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <circle cx="22" cy="24" r="6" />
+              <circle cx="44" cy="20" r="5" opacity=".7" />
+              <circle cx="36" cy="44" r="7" />
+              <path d="M22 24 44 20M22 24l14 20M44 20l-8 24" />
+            </svg>
+            <span>
+              Re<b>:</b>Trace
+            </span>
+            <span className="report-no">
+              {T.reportNo}
+              {r.id} · дело #{s.case.id}
+            </span>
+          </div>
+          <p className="report-kicker">{T.reportFrom} {dateTime(r.createdAt)}</p>
           <h1>{s.case.title}</h1>
           <p>{s.case.description}</p>
           <p className="small">
@@ -111,8 +126,27 @@ export function ReportPage() {
         <section className="limits">
           <h2>5. Ограничения</h2>
           <p>{T.reportLimits}</p>
+          {r.fingerprint && (
+            <p className="fingerprint small">
+              {T.fingerprint}: <code data-testid="fingerprint">{r.fingerprint}</code>
+              <br />
+              <span className="muted">{T.fingerprintHint}</span>
+            </p>
+          )}
         </section>
       </article>
     </>
   );
+}
+
+/** #26 the browser's print dialog saves the PDF; the document title becomes its file name. */
+export function printAsPdf(filename: string) {
+  const previous = document.title;
+  document.title = filename;
+  const restore = () => {
+    document.title = previous;
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
+  window.print();
 }

@@ -673,7 +673,9 @@ export function createServices(repo, deps) {
     const risk = JSON.parse(r.snapshot).risk;
     return { id: r.id, caseId: r.caseId, createdAt: iso(r.createdAt), createdBy: r.createdBy, createdByName: author?.name ?? null, riskScore: risk.score, riskLevel: risk.level };
   }
-  function reportDto(r, author) {
-    return { ...reportSummary(r, author), snapshot: JSON.parse(r.snapshot) };
+  /** #26 the fingerprint is the SHA-256 of the snapshot exactly as stored, so a printed report can be checked later. */
+  async function reportDto(r, author) {
+    const fingerprint = await deps.sha256(new TextEncoder().encode(r.snapshot));
+    return { ...reportSummary(r, author), fingerprint, snapshot: JSON.parse(r.snapshot) };
   }
 }

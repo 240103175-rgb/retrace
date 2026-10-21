@@ -818,8 +818,9 @@ components:
       allOf:
         - $ref: '#/components/schemas/ReportSummary'
         - type: object
-          required: [snapshot]
+          required: [snapshot, fingerprint]
           properties:
+            fingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'SHA-256 of the stored snapshot (#26); identical for the same report every time' }
             snapshot:
               type: object
               required: [case, evidence, entities, relationships, risk]

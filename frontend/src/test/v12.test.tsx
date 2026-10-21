@@ -98,3 +98,34 @@ describe('#24 draft summary', () => {
     await waitFor(() => expect(document.getElementById(`evidence-${id}`)).toHaveClass('flash'));
   });
 });
+
+describe('#26 branded PDF', () => {
+  it('report shows its fingerprint and «Скачать PDF» prints under a file name', async () => {
+    const api = renderApp('/login?next=/cases');
+    await signIn();
+    await screen.findByText(/вакансия/);
+    const job = (await api.listCases()).find((c) => c.title.includes('вакансия'))!;
+    const rep = await api.createReport(job.id);
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {
+      expect(document.title).toBe(`retrace-case-${job.id}-report-${rep.id}`);
+    });
+    await userEvent.click(screen.getByText(/вакансия/));
+    await userEvent.click(await screen.findByRole('tab', { name: 'Отчёты' }));
+    await userEvent.click((await screen.findAllByRole('link', { name: /Открыть|Отчёт/ }))[0]);
+    expect((await screen.findByTestId('fingerprint')).textContent).toBe(rep.fingerprint);
+    expect(screen.getByText('Сводка')).toBeInTheDocument();
+    const before = document.title;
+    await userEvent.click(screen.getByRole('button', { name: 'Скачать PDF' }));
+    expect(print).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event('afterprint'));
+    expect(document.title).toBe(before);
+  });
+
+  it('print stylesheet hides the app and numbers the pages', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync('src/styles.css', 'utf8');
+    const print = css.slice(css.indexOf('@media print'));
+    expect(print).toMatch(/\.topbar, \.no-print[^{]*\{ display: none !important; \}/);
+    expect(css).toMatch(/@page \{[^]*counter\(page\)[^]*counter\(pages\)/);
+  });
+});

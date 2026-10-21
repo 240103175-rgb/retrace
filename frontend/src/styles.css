@@ -255,11 +255,28 @@ textarea { resize: vertical; }
   .report { padding: 20px; }
 }
 
+/* #26 branded PDF via the print dialog */
+.report-brand { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 3px solid #0e7490; font-weight: 700; font-size: 1.1rem; color: #0b1220; }
+.report-brand svg { width: 28px; height: 28px; fill: #0e7490; stroke: #0e7490; stroke-width: 2.5; }
+.report-brand b { color: #0e7490; }
+.report-no { margin-left: auto; font-weight: 500; font-size: .85rem; color: #4b5563; }
+.fingerprint code { word-break: break-all; font-size: .78rem; }
+@page {
+  size: A4;
+  margin: 16mm 14mm 18mm;
+  @bottom-left { content: 'Re:Trace · индикатор риска, а не доказательство'; font: 8pt sans-serif; color: #6b7280; }
+  @bottom-right { content: 'стр. ' counter(page) ' из ' counter(pages); font: 8pt sans-serif; color: #6b7280; }
+}
 @media print {
+  :root { color-scheme: light; }
   body { background: #fff; }
-  .topbar, .no-print, .toasts { display: none !important; }
+  .topbar, .no-print, .toasts, .skip-link { display: none !important; }
   .main { padding: 0; max-width: none; }
-  .report { padding: 0; }
+  .report { padding: 0; border-radius: 0; max-width: none; }
+  .report h2 { break-after: avoid; }
+  .report tr, .report li { break-inside: avoid; }
+  .report .cite { border-color: #9ca3af; color: #0e7490; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
 /* v1.1 */

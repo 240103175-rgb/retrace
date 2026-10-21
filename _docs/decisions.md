@@ -52,3 +52,14 @@ Each entry: context → decision → alternatives considered → consequences.
 - **Context:** #29 needs a tested PostgreSQL profile; the development machine has no PostgreSQL or Docker.
 - **Decision:** `pg` driver; the service, feature and API suites run on a `postgres:16` service container in CI (`TEST_DATABASE_URL`), plus a smoke run of the server on PostgreSQL.
 - **Consequences:** a PostgreSQL regression shows up in CI, not in a local `npm test`.
+
+## 2026-10-21 — Branded PDF through the browser's print engine
+- **Context:** #26 asks for a branded PDF; server-side PDF needs a PDF library plus embedded Cyrillic fonts.
+- **Decision:** a print stylesheet (`@page` A4, footer and page numbers in margin boxes, brand header) and «Скачать PDF» opening the print dialog with the file name as document title. Reports carry a SHA-256 fingerprint of their stored snapshot so a printout can be checked.
+- **Alternatives:** pdfkit / Puppeteer on the server (new heavy dependencies, fonts to manage).
+- **Consequences:** the user clicks «Сохранить как PDF»; margin boxes need Chromium 131+ (other browsers print without the footer). Verified by rendering a report with headless Chrome.
+
+## 2026-10-21 — Entity suggestions and summaries by rules, not an LLM
+- **Context:** #23/#24 were parked as "AI" features; the brainstorm warned about wrong conclusions.
+- **Decision (user, 2026-10-21):** deterministic rules — regexes with Luhn for entities, templates over case data for the summary, every statement citing its evidence.
+- **Consequences:** no API key, reproducible tests, quality measured on a labelled corpus; names of people and organisations are not suggested.

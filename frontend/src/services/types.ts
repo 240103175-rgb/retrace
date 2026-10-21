@@ -196,6 +196,8 @@ export interface ReportSummary {
 }
 
 export interface Report extends ReportSummary {
+  /** SHA-256 of the stored snapshot (#26). */
+  fingerprint?: string;
   snapshot: {
     case: CaseSummary;
     evidence: Evidence[];
