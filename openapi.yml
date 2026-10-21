@@ -335,6 +335,15 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /cases/{caseId}/entity-suggestions:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Entities found in the case's evidence text that are not in the case yet (rule-based, never added automatically)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/EntitySuggestion' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /cases/{caseId}/entities:
     parameters: [{ $ref: '#/components/parameters/CaseId' }]
     get:
@@ -678,6 +687,16 @@ components:
         type: { $ref: '#/components/schemas/EntityType' }
         label: { type: string }
         note: { type: [string, 'null'] }
+
+    EntitySuggestion:
+      type: object
+      required: [kind, type, label, evidenceIds]
+      additionalProperties: false
+      properties:
+        kind: { type: string, enum: [phone, card, url, email, handle, iban, wallet], description: Which pattern found it }
+        type: { $ref: '#/components/schemas/EntityType' }
+        label: { type: string }
+        evidenceIds: { type: array, minItems: 1, items: { type: integer } }
 
     EntityInput:
       type: object

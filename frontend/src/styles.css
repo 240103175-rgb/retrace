@@ -318,3 +318,8 @@ textarea { resize: vertical; }
 .file-list code { color: var(--muted); }
 .link-btn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; word-break: break-all; text-align: left; }
 .report-file code { word-break: break-all; }
+
+/* #23 suggestions */
+.suggestions h3 { margin: 0; }
+.suggestion { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.suggestion:last-child { border-bottom: 0; }

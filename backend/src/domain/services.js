@@ -2,6 +2,7 @@
 // talks only to the repository interface and to injected crypto helpers,
 // so the same code runs in the backend and in the frontend mockService.
 import { fail } from './errors.js';
+import { suggestEntities } from './extract.js';
 import { MAX_FILES_PER_EVIDENCE, checkUpload } from './files.js';
 import { assessRisk } from './risk.js';
 
@@ -429,6 +430,13 @@ export function createServices(repo, deps) {
     async listEntities(user, caseId) {
       const c = await readableCase(user, caseId);
       return (await repo.listEntities(c.id)).map(entityDto);
+    },
+
+    /** #23 rule-based suggestions; the investigator decides what to add. */
+    async entitySuggestions(user, caseId) {
+      const c = await readableCase(user, caseId);
+      const { evidence, entities } = await caseContent(c.id);
+      return suggestEntities(evidence, entities);
     },
 
     async createEntity(user, caseId, body = {}) {

@@ -91,6 +91,7 @@ export function createHttpService(baseUrl = '/api/v1', fetchImpl: typeof fetch =
     deleteAttachment: (caseId, evidenceId, id) => request('DELETE', `${c(caseId)}/evidence/${evidenceId}/attachments/${id}`),
 
     listEntities: (caseId) => request('GET', `${c(caseId)}/entities`),
+    entitySuggestions: (caseId) => request('GET', `${c(caseId)}/entity-suggestions`),
     createEntity: (caseId, input) => request('POST', `${c(caseId)}/entities`, input),
     updateEntity: (caseId, id, patch) => request('PATCH', `${c(caseId)}/entities/${id}`, patch),
     deleteEntity: (caseId, id) => request('DELETE', `${c(caseId)}/entities/${id}`),

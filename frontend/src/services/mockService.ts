@@ -116,6 +116,7 @@ export function createMockService(options: MockOptions = {}): RetraceApi & { fai
     deleteAttachment: (caseId, evidenceId, id) => authed((u) => svc.deleteAttachment(u, caseId, evidenceId, id)),
 
     listEntities: (caseId) => authed((u) => svc.listEntities(u, caseId)),
+    entitySuggestions: (caseId) => authed((u) => svc.entitySuggestions(u, caseId)),
     createEntity: (caseId, input) => authed((u) => svc.createEntity(u, caseId, input)),
     updateEntity: (caseId, id, patch) => authed((u) => svc.updateEntity(u, caseId, id, patch)),
     deleteEntity: (caseId, id) => authed((u) => svc.deleteEntity(u, caseId, id)),

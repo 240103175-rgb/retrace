@@ -59,3 +59,25 @@ describe('#25 evidence files', () => {
     expect(upload).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('#23 entity suggestions', () => {
+  it('shows suggestions as hints and adds one only on click', async () => {
+    const api = renderApp('/login?next=/cases');
+    const create = vi.spyOn(api, 'createEntity');
+    await signIn();
+    await screen.findByText(/OLX/);
+    const olx = (await api.listCases()).find((c) => c.title.includes('OLX'))!;
+    await api.createEvidence(olx.id, { type: 'message', content: 'Перезвоните на +7 701 999 88 77 или @olx_help_kz' });
+    await openCase(/OLX/, 'Сущности');
+    const panel = within(await screen.findByTestId('suggestions'));
+    expect(panel.getByText(/Подсказка — проверьте перед добавлением/)).toBeInTheDocument();
+    expect(create).not.toHaveBeenCalled();
+    const before = panel.getAllByRole('listitem').length;
+    const first = panel.getAllByRole('button', { name: /^Добавить / })[0];
+    const label = first.getAttribute('aria-label')!.replace(/^Добавить /, '');
+    await userEvent.click(first);
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create.mock.calls[0][1].label).toBe(label);
+    await waitFor(() => expect(screen.queryAllByTestId('suggestions').length === 0 || within(screen.getByTestId('suggestions')).getAllByRole('listitem').length === before - 1).toBe(true));
+  });
+});

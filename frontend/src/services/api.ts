@@ -11,6 +11,7 @@ import type {
   Download,
   EvidenceFilter,
   Entity,
+  EntitySuggestion,
   EntityInput,
   Evidence,
   EvidenceInput,
@@ -59,6 +60,7 @@ export interface RetraceApi {
   deleteAttachment(caseId: number, evidenceId: number, id: number): Promise<void>;
 
   listEntities(caseId: number): Promise<Entity[]>;
+  entitySuggestions(caseId: number): Promise<EntitySuggestion[]>;
   createEntity(caseId: number, input: EntityInput): Promise<Entity>;
   updateEntity(caseId: number, id: number, patch: Partial<EntityInput>): Promise<Entity>;
   deleteEntity(caseId: number, id: number): Promise<void>;

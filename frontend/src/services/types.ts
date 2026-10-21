@@ -125,6 +125,13 @@ export interface Entity {
   note: string | null;
 }
 
+export interface EntitySuggestion {
+  kind: 'phone' | 'card' | 'url' | 'email' | 'handle' | 'iban' | 'wallet';
+  type: EntityType;
+  label: string;
+  evidenceIds: number[];
+}
+
 export interface EntityInput {
   type: EntityType;
   label: string;
