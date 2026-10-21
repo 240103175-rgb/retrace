@@ -125,6 +125,18 @@ export interface Entity {
   note: string | null;
 }
 
+export interface SummaryStatement {
+  kind: 'scope' | 'verification' | 'risk' | 'rule' | 'no_rules' | 'payments' | 'hub';
+  params: Record<string, unknown>;
+  evidenceIds: number[];
+  entityIds: number[];
+}
+
+export interface Summary {
+  generatedAt?: string;
+  statements: SummaryStatement[];
+}
+
 export interface EntitySuggestion {
   kind: 'phone' | 'card' | 'url' | 'email' | 'handle' | 'iban' | 'wallet';
   type: EntityType;
@@ -190,6 +202,8 @@ export interface Report extends ReportSummary {
     entities: Entity[];
     relationships: Relationship[];
     risk: Risk;
+    /** Present in reports made from v1.2 on (#24). */
+    summary?: Summary;
   };
 }
 

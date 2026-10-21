@@ -323,3 +323,10 @@ textarea { resize: vertical; }
 .suggestions h3 { margin: 0; }
 .suggestion { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .suggestion:last-child { border-bottom: 0; }
+
+/* #24 summary */
+.summary-list { margin: 8px 0; padding-left: 18px; display: grid; gap: 6px; }
+.summary-rule { margin-left: 16px; list-style: circle; }
+.cite { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 6px; background: none; color: var(--accent); font: inherit; font-size: .75rem; cursor: pointer; }
+span.cite { cursor: default; }
+.flash { outline: 2px solid var(--accent); outline-offset: 2px; transition: outline-color 1.5s; }

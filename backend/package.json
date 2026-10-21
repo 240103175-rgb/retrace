@@ -11,7 +11,7 @@
     "validate:api": "node -e \"require('@apidevtools/swagger-parser').validate('../openapi.yml').then(()=>console.log('openapi.yml is valid'))\"",
     "db:reset": "node scripts/reset-db.js",
     "smoke": "node scripts/smoke.mjs",
-    "test:postgres": "node --test --test-concurrency=1 test/services.test.js test/features.test.js test/attachments.test.js test/extract.test.js test/api.test.js",
+    "test:postgres": "node --test --test-concurrency=1 test/services.test.js test/features.test.js test/attachments.test.js test/extract.test.js test/summary.test.js test/api.test.js",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=test/** test/*.test.js"
   },
   "dependencies": {

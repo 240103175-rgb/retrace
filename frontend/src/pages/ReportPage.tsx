@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { RiskView } from '../components/RiskTab';
+import { SummaryView } from '../components/SummaryView';
 import { useTitle } from '../components/kit';
 import { ErrorBox, Loading } from '../components/ui';
 import { date, dateTime, money } from '../lib/format';
@@ -43,6 +44,13 @@ export function ReportPage() {
           <h2>1. {T.risk}</h2>
           <RiskView risk={s.risk} />
         </section>
+
+        {s.summary && (
+          <section>
+            <h2>{T.summary}</h2>
+            <SummaryView summary={s.summary} />
+          </section>
+        )}
 
         <section>
           <h2>2. {T.evidence} ({s.evidence.length})</h2>

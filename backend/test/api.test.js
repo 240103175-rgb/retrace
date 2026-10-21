@@ -77,6 +77,8 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       assert.equal((await call('POST', `/cases/${c.id}/relationships`, { token: t, body: { sourceId: a.id, targetId: a.id, type: 'owns' } })).data.error.code, 'invalid_relationship');
       assert.equal((await call('GET', `/cases/${c.id}/relationships`, { token: t })).data.length, 1);
       assert.equal((await call('GET', `/cases/${c.id}/graph`, { token: t })).data.edges.length, 1);
+      const sum = (await call('GET', `/cases/${c.id}/summary`, { token: t })).data;
+      assert.deepEqual(sum.statements.map((x) => x.kind).slice(0, 3), ['scope', 'verification', 'risk']);
       const sugg = (await call('GET', `/cases/${c.id}/entity-suggestions`, { token: t })).data;
       assert.deepEqual(sugg.map((x) => x.label), ['https://bit.ly/prize-kz']); // @prize_kz already exists
       const risk = (await call('GET', `/cases/${c.id}/risk`, { token: t })).data;
@@ -113,6 +115,7 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
         ['GET', `/cases/${bank}/relationships`],
         ['GET', `/cases/${bank}/graph`],
         ['GET', `/cases/${bank}/entity-suggestions`],
+        ['GET', `/cases/${bank}/summary`],
         ['GET', `/cases/${bank}/risk`],
         ['GET', `/cases/${bank}/reports`],
         ['POST', `/cases/${bank}/reports`],

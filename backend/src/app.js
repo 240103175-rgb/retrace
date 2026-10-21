@@ -141,6 +141,7 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
   crud('entities', 'listEntities', 'createEntity', 'updateEntity', 'deleteEntity');
   crud('relationships', 'listRelationships', 'createRelationship', null, 'deleteRelationship');
 
+  api.get('/cases/:caseId/summary', h(async (req, res) => res.json(await svc.summary(req.user, id(req.params.caseId)))));
   api.get('/cases/:caseId/entity-suggestions', h(async (req, res) => res.json(await svc.entitySuggestions(req.user, id(req.params.caseId)))));
   api.get('/cases/:caseId/graph', h(async (req, res) => res.json(await svc.graph(req.user, id(req.params.caseId)))));
   api.get('/cases/:caseId/risk', h(async (req, res) => res.json(await svc.risk(req.user, id(req.params.caseId)))));

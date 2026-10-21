@@ -344,6 +344,15 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /cases/{caseId}/summary:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Draft summary — template statements, each citing the evidence and entities behind it (not stored)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Summary' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /cases/{caseId}/entities:
     parameters: [{ $ref: '#/components/parameters/CaseId' }]
     get:
@@ -688,6 +697,23 @@ components:
         label: { type: string }
         note: { type: [string, 'null'] }
 
+    Summary:
+      type: object
+      required: [statements]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        statements:
+          type: array
+          items:
+            type: object
+            required: [kind, params, evidenceIds, entityIds]
+            additionalProperties: false
+            properties:
+              kind: { type: string, enum: [scope, verification, risk, rule, no_rules, payments, hub] }
+              params: { type: object, description: 'Values for the template of this kind (counts, score, rule id, label …)' }
+              evidenceIds: { type: array, items: { type: integer } }
+              entityIds: { type: array, items: { type: integer } }
+
     EntitySuggestion:
       type: object
       required: [kind, type, label, evidenceIds]
@@ -803,6 +829,7 @@ components:
                 entities: { type: array, items: { $ref: '#/components/schemas/Entity' } }
                 relationships: { type: array, items: { $ref: '#/components/schemas/Relationship' } }
                 risk: { $ref: '#/components/schemas/Risk' }
+                summary: { $ref: '#/components/schemas/Summary' }
 
     AdminStats:
       type: object

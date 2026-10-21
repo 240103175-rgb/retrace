@@ -12,6 +12,7 @@ import type {
   EvidenceFilter,
   Entity,
   EntitySuggestion,
+  Summary,
   EntityInput,
   Evidence,
   EvidenceInput,
@@ -71,6 +72,7 @@ export interface RetraceApi {
 
   graph(caseId: number): Promise<Graph>;
   risk(caseId: number): Promise<Risk>;
+  summary(caseId: number): Promise<Summary>;
 
   listReports(caseId: number): Promise<ReportSummary[]>;
   createReport(caseId: number): Promise<Report>;

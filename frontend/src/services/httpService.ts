@@ -102,6 +102,7 @@ export function createHttpService(baseUrl = '/api/v1', fetchImpl: typeof fetch =
 
     graph: (caseId) => request('GET', `${c(caseId)}/graph`),
     risk: (caseId) => request('GET', `${c(caseId)}/risk`),
+    summary: (caseId) => request('GET', `${c(caseId)}/summary`),
 
     listReports: (caseId) => request('GET', `${c(caseId)}/reports`),
     createReport: (caseId) => request('POST', `${c(caseId)}/reports`),

@@ -143,7 +143,7 @@ export function EntitiesTab({ caseData, editable, onChanged }: CaseTabProps) {
       ) : (
         <ul className="chips-list">
           {entities.map((en) => (
-            <li key={en.id} className={`entity entity-${en.type}`} data-testid="entity">
+            <li key={en.id} id={`entity-${en.id}`} className={`entity entity-${en.type}`} data-testid="entity">
               <span className="entity-icon">{ENTITY_ICON[en.type]}</span>
               <span>
                 <b className={en.type === 'link' || en.type === 'card' || en.type === 'phone' ? 'mono' : ''}>{en.label}</b>

@@ -127,6 +127,7 @@ export function createMockService(options: MockOptions = {}): RetraceApi & { fai
 
     graph: (caseId) => authed((u) => svc.graph(u, caseId)),
     risk: (caseId) => authed((u) => svc.risk(u, caseId)),
+    summary: (caseId) => authed((u) => svc.summary(u, caseId)),
 
     listReports: (caseId) => authed((u) => svc.listReports(u, caseId)),
     createReport: (caseId) => authed((u) => svc.createReport(u, caseId)),

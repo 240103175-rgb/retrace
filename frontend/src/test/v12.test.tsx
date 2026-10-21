@@ -81,3 +81,20 @@ describe('#23 entity suggestions', () => {
     await waitFor(() => expect(screen.queryAllByTestId('suggestions').length === 0 || within(screen.getByTestId('suggestions')).getAllByRole('listitem').length === before - 1).toBe(true));
   });
 });
+
+describe('#24 draft summary', () => {
+  it('renders statements with citations that open the cited evidence', async () => {
+    renderApp('/login?next=/cases');
+    await signIn();
+    await openCase(/вакансия/);
+    const s = within(await screen.findByTestId('summary'));
+    expect(s.getByText(/^В деле 4 доказательства, \d+ (сущность|сущности|сущностей) и \d+ (связь|связи|связей)\.$/)).toBeInTheDocument();
+    expect(s.getByText(/^Индикатор риска — \d+ из 100/)).toBeInTheDocument();
+    expect(s.getByText('Это индикатор риска, а не доказательство мошенничества.')).toBeInTheDocument();
+    const chip = s.getAllByRole('button', { name: /^Открыть доказательство #/ })[0];
+    const id = chip.getAttribute('aria-label')!.split('#')[1];
+    await userEvent.click(chip);
+    expect(screen.getByRole('tab', { name: /Доказательства/ })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(document.getElementById(`evidence-${id}`)).toHaveClass('flash'));
+  });
+});

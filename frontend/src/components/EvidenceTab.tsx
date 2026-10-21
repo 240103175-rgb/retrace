@@ -182,7 +182,7 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
       ) : (
         <ul className="items">
           {list.data.map((e) => (
-            <li key={e.id} className={`item verify-row-${e.verification}`} data-testid="evidence-row">
+            <li key={e.id} id={`evidence-${e.id}`} className={`item verify-row-${e.verification}`} data-testid="evidence-row">
               <div className="item-head">
                 <span className="tl-type">{EVIDENCE_TYPE[e.type]}</span>
                 <VerificationPill value={e.verification} />

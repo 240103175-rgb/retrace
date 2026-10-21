@@ -5,6 +5,7 @@ import { fail } from './errors.js';
 import { suggestEntities } from './extract.js';
 import { MAX_FILES_PER_EVIDENCE, checkUpload } from './files.js';
 import { assessRisk } from './risk.js';
+import { buildSummary } from './summary.js';
 
 export const CASE_STATUSES = ['open', 'in_review', 'closed', 'archived'];
 export const LOCKED_STATUSES = ['closed', 'archived'];
@@ -432,6 +433,13 @@ export function createServices(repo, deps) {
       return (await repo.listEntities(c.id)).map(entityDto);
     },
 
+    /** #24 draft summary: statements with citations; computed on read, never stored on its own. */
+    async summary(user, caseId) {
+      const c = await readableCase(user, caseId);
+      const content = await caseContent(c.id);
+      return { generatedAt: iso(now()), ...buildSummary(content, assessRisk(content)) };
+    },
+
     /** #23 rule-based suggestions; the investigator decides what to add. */
     async entitySuggestions(user, caseId) {
       const c = await readableCase(user, caseId);
@@ -573,6 +581,7 @@ export function createServices(repo, deps) {
         entities: content.entities.map(entityDto),
         relationships: content.relationships.map(relationshipDto),
         risk: assessRisk(content),
+        summary: buildSummary(content, assessRisk(content)),
       };
       const r = await repo.createReport({ caseId: c.id, createdBy: user.id, createdAt: now(), snapshot: JSON.stringify(snapshot) });
       await audit(user, 'report.create', 'report', r.id, c.id);

@@ -5,6 +5,7 @@ import { EvidenceTab } from '../components/EvidenceTab';
 import { GraphTab } from '../components/GraphTab';
 import { ReportsTab } from '../components/ReportsTab';
 import { RiskTab } from '../components/RiskTab';
+import { CaseSummaryDraft } from '../components/SummaryView';
 import { CharCounter, hasUnsavedForms, saveDownload, useDiscardGuard, useTitle } from '../components/kit';
 import { ErrorBox, Field, FormError, Loading, RiskBadge, StatusPill, VerificationPill } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -309,6 +310,8 @@ function Overview({ caseData, editable, onChanged, openTab }: CaseTabProps) {
           {T.risk}
         </div>
       </div>
+      <h2>{T.summaryDraft}</h2>
+      <CaseSummaryDraft caseId={caseData.id} version={caseData.updatedAt} onCite={(kind, id) => cite(openTab, kind, id)} />
       <h2>{T.notes}</h2>
       <Field label={T.notes} extra={<CharCounter value={notes} max={5000} />}>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} maxLength={5000} readOnly={!editable} />
@@ -342,4 +345,20 @@ function Overview({ caseData, editable, onChanged, openTab }: CaseTabProps) {
       )}
     </>
   );
+}
+
+/** #24 a citation opens the tab and brings the cited item into view once it is rendered. */
+function cite(openTab: CaseTabProps['openTab'], kind: 'evidence' | 'entity', id: number) {
+  openTab?.(kind === 'evidence' ? 'evidence' : 'entities');
+  const target = `${kind}-${id}`;
+  let tries = 0;
+  const find = () => {
+    const el = document.getElementById(target);
+    if (el) {
+      el.scrollIntoView?.({ block: 'center' });
+      el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 1600);
+    } else if (tries++ < 20) setTimeout(find, 100);
+  };
+  find();
 }

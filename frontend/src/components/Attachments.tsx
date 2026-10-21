@@ -114,10 +114,9 @@ export function Attachments({ caseId, evidenceId, files, editable, onChanged }: 
       {editable && files.length < 10 && (
         <>
           <input ref={input} type="file" hidden accept={FILE_TYPES.join(',')} aria-label={T.attachFile} onChange={(e) => void upload(e)} />
-          <button type="button" className="btn btn-ghost btn-xs" disabled={busy} onClick={() => input.current?.click()}>
+          <button type="button" className="btn btn-ghost btn-xs" disabled={busy} title={T.fileHint} onClick={() => input.current?.click()}>
             {busy ? T.saving : `+ ${T.attachFile}`}
           </button>
-          <span className="muted small"> {T.fileHint}</span>
         </>
       )}
     </div>
