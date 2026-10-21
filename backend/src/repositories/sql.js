@@ -70,6 +70,11 @@ function defineModels(sequelize) {
   );
   const RelationshipEvidence = sequelize.define('RelationshipEvidence', {}, opts('relationship_evidence'));
   const Report = sequelize.define('Report', { createdAt: ms(), snapshot: txt() }, opts('reports', { indexes: [{ fields: ['caseId'] }] }));
+  const Attachment = sequelize.define(
+    'Attachment',
+    { filename: str(200), mimeType: str(60), size: { type: DataTypes.INTEGER, allowNull: false }, sha256: str(64), data: { type: DataTypes.BLOB, allowNull: false }, createdAt: ms() },
+    opts('attachments', { indexes: [{ fields: ['caseId'] }, { fields: ['evidenceId'] }] }),
+  );
   const AuditEvent = sequelize.define(
     'AuditEvent',
     { action: str(60), resourceType: str(30), resourceId: { type: DataTypes.INTEGER, allowNull: true }, caseId: { type: DataTypes.INTEGER, allowNull: true }, at: ms() },
@@ -87,10 +92,13 @@ function defineModels(sequelize) {
   RelationshipEvidence.belongsTo(Evidence, fk('evidenceId'));
   Relationship.hasMany(RelationshipEvidence, { as: 'support', ...fk('relationshipId') });
   Report.belongsTo(Case, fk('caseId'));
+  Attachment.belongsTo(Case, fk('caseId'));
+  Attachment.belongsTo(Evidence, fk('evidenceId'));
+  Attachment.belongsTo(User, { as: 'uploader', ...fk('createdBy') });
   Report.belongsTo(User, { as: 'author', ...fk('createdBy') });
   AuditEvent.belongsTo(User, { as: 'actor', foreignKey: { name: 'actorId', allowNull: true }, onDelete: 'SET NULL' });
 
-  return { User, Session, Case, Evidence, Entity, Relationship, RelationshipEvidence, Report, AuditEvent };
+  return { User, Session, Case, Evidence, Entity, Relationship, RelationshipEvidence, Report, Attachment, AuditEvent };
 }
 
 /** Columns added after v1.0 (#38): added to existing tables on start, never dropped. */
@@ -215,8 +223,27 @@ export async function createSqlRepository(url = process.env.DATABASE_URL || DEFA
     async deleteEvidence(id) {
       await sequelize.transaction(async (transaction) => {
         await m.RelationshipEvidence.destroy({ where: { evidenceId: id }, transaction });
+        await m.Attachment.destroy({ where: { evidenceId: id }, transaction });
         await m.Evidence.destroy({ where: { id }, transaction });
       });
+    },
+
+    // #25 attachments; lists never load the bytes.
+    async createAttachment(a) {
+      const row = await m.Attachment.create({ ...a, data: Buffer.from(a.data) }); // drivers store Buffers, not Uint8Arrays
+      const { data, ...meta } = out(row);
+      return meta;
+    },
+    async listAttachments({ caseId, evidenceId = null }) {
+      const where = evidenceId == null ? { caseId } : { caseId, evidenceId };
+      return (await m.Attachment.findAll({ where, attributes: { exclude: ['data'] }, order: [['id', 'ASC']] })).map(out);
+    },
+    async getAttachment(id) {
+      const a = out(await m.Attachment.findByPk(id));
+      return a && { ...a, data: new Uint8Array(a.data) };
+    },
+    async deleteAttachment(id) {
+      await m.Attachment.destroy({ where: { id } });
     },
 
     async listEntities(caseId) {

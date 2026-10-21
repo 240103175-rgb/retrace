@@ -1,5 +1,5 @@
 // Node-side crypto for the services: scrypt password hashes and random tokens.
-import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
 const scrypt = promisify(scryptCb);
@@ -19,4 +19,7 @@ export async function verifyPassword(password, stored) {
 
 export const randomToken = () => randomBytes(32).toString('hex');
 
-export const nodeDeps = (now = Date.now) => ({ now, hashPassword, verifyPassword, randomToken });
+/** Hex SHA-256 of bytes (#25). */
+export const sha256 = async (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+export const nodeDeps = (now = Date.now) => ({ now, hashPassword, verifyPassword, randomToken, sha256 });

@@ -36,7 +36,7 @@ const ACTION_GROUPS: [string, string][] = [
 const PAGE = 50;
 
 const actionText = (a: string) =>
-  ({ 'case.export': 'экспортировал дело', 'user.update': 'изменил имя', 'user.password': 'сменил пароль', 'user.logout_all': 'вышел на всех устройствах', 'user.disabled': 'отключил пользователя', 'user.enabled': 'включил пользователя' } as Record<string, string>)[a] ??
+  ({ 'case.export': 'экспортировал дело', 'evidence.attachment.add': 'прикрепил файл', 'evidence.attachment.delete': 'удалил файл', 'user.update': 'изменил имя', 'user.password': 'сменил пароль', 'user.logout_all': 'вышел на всех устройствах', 'user.disabled': 'отключил пользователя', 'user.enabled': 'включил пользователя' } as Record<string, string>)[a] ??
   ACTION[a] ??
   (a.startsWith('case.status.') ? `статус → ${STATUS[a.slice(12) as CaseStatus] ?? a.slice(12)}` : a.startsWith('user.role.') ? `роль → ${a.slice(10)}` : a);
 

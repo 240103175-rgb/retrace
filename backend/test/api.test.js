@@ -113,6 +113,8 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
         ['GET', `/cases/${bank}/risk`],
         ['GET', `/cases/${bank}/reports`],
         ['POST', `/cases/${bank}/reports`],
+        ['GET', `/cases/${bank}/evidence/1/attachments`],
+        ['POST', `/cases/${bank}/evidence/1/attachments`, { filename: 'a.txt', mimeType: 'text/plain', dataBase64: 'YQ==' }],
       ];
       for (const [method, path, body] of probes) {
         const res = await call(method, path, { token: tokens.aigerim, body });
@@ -157,6 +159,31 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       assert.equal((await call('POST', '/cases', { token: tokens.aigerim, raw: '{' })).data.error.code, 'validation_error');
       const nf = await fetch(`${base}/nope`, { headers: { authorization: `Bearer ${tokens.aigerim}` } });
       assert.equal(nf.status, 404);
+    });
+
+    it('#25 attachments over HTTP: upload, list, download with checksum, size limit, delete', async () => {
+      const t = tokens.aigerim;
+      const olx = ctx.olx.id;
+      const [ev] = (await call('GET', `/cases/${olx}/evidence`, { token: t })).data;
+      const bytes = Buffer.from('%PDF-1.4\nчек об оплате\n', 'utf8');
+      const up = await call('POST', `/cases/${olx}/evidence/${ev.id}/attachments`, { token: t, body: { filename: 'чек.pdf', mimeType: 'application/pdf', dataBase64: bytes.toString('base64') } });
+      assert.equal(up.status, 201);
+      assert.equal((await call('GET', `/cases/${olx}/evidence/${ev.id}/attachments`, { token: t })).data.length, 1);
+      const path = `/cases/${olx}/evidence/${ev.id}/attachments/${up.data.id}/content`;
+      assert.equal((await call('GET', path, { token: t })).status, 200);
+      const res = await fetch(base + path, { headers: { authorization: `Bearer ${t}` } });
+      assert.deepEqual(Buffer.from(await res.arrayBuffer()), bytes);
+      assert.equal(res.headers.get('content-type'), 'application/octet-stream');
+      assert.match(res.headers.get('content-disposition'), /^attachment; .*filename\*=UTF-8''%D1%87%D0%B5%D0%BA\.pdf$/);
+      assert.equal(res.headers.get('x-checksum-sha256'), up.data.sha256);
+      assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+      assert.equal((await call('GET', path, { token: tokens.daniyar })).status, 404);
+      const huge = 'A'.repeat(3.2 * 1024 * 1024);
+      assert.equal((await call('POST', `/cases/${olx}/evidence/${ev.id}/attachments`, { token: t, body: { filename: 'x.txt', mimeType: 'text/plain', dataBase64: huge } })).data.error.code, 'file_too_large');
+      assert.equal((await call('POST', `/cases/${olx}/evidence/${ev.id}/attachments`, { token: t, body: { filename: 'x.exe', mimeType: 'image/png', dataBase64: 'TVqQAA==' } })).status, 415);
+      assert.equal((await call('PATCH', `/cases/${olx}`, { token: t, raw: JSON.stringify({ notes: 'x'.repeat(200 * 1024) }) })).status, 400); // small limit elsewhere
+      assert.equal((await call('DELETE', `/cases/${olx}/evidence/${ev.id}/attachments/${up.data.id}`, { token: tokens.admin })).status, 403);
+      assert.equal((await call('DELETE', `/cases/${olx}/evidence/${ev.id}/attachments/${up.data.id}`, { token: t })).status, 204);
     });
 
     it('covers every operation in the contract', () => {

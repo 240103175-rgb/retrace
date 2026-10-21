@@ -2,6 +2,7 @@
 // talks only to the repository interface and to injected crypto helpers,
 // so the same code runs in the backend and in the frontend mockService.
 import { fail } from './errors.js';
+import { MAX_FILES_PER_EVIDENCE, checkUpload } from './files.js';
 import { assessRisk } from './risk.js';
 
 export const CASE_STATUSES = ['open', 'in_review', 'closed', 'archived'];
@@ -57,7 +58,17 @@ const normEmail = (email) => {
 
 // ---------- DTOs ----------
 export const userDto = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, disabled: Boolean(u.disabled), createdAt: iso(u.createdAt) });
-const evidenceDto = (e) => ({
+const attachmentDto = (a) => ({
+  id: a.id,
+  evidenceId: a.evidenceId,
+  caseId: a.caseId,
+  filename: a.filename,
+  mimeType: a.mimeType,
+  size: a.size,
+  sha256: a.sha256,
+  createdAt: iso(a.createdAt),
+});
+const evidenceDto = (e, files = []) => ({
   id: e.id,
   caseId: e.caseId,
   type: e.type,
@@ -67,6 +78,7 @@ const evidenceDto = (e) => ({
   amount: e.amount ?? null,
   verification: e.verification,
   createdAt: iso(e.createdAt),
+  attachments: files.filter((a) => a.evidenceId === e.id).map(attachmentDto),
 });
 const entityDto = (e) => ({ id: e.id, caseId: e.caseId, type: e.type, label: e.label, note: e.note ?? null });
 const normLabel = (s) => String(s).trim().replace(/\s+/g, ' ').toLocaleLowerCase();
@@ -143,12 +155,18 @@ export function createServices(repo, deps) {
   const requireAdmin = (user) => user.role === 'admin' || fail('forbidden', 403);
 
   async function caseContent(caseId) {
-    const [evidence, entities, relationships] = await Promise.all([
+    const [evidence, entities, relationships, files] = await Promise.all([
       repo.listEvidence(caseId),
       repo.listEntities(caseId),
       repo.listRelationships(caseId),
+      repo.listAttachments({ caseId }),
     ]);
-    return { evidence, entities, relationships };
+    return { evidence, entities, relationships, files };
+  }
+  async function evidenceItem(c, evidenceId) {
+    const e = await repo.getEvidence(Number(evidenceId));
+    if (!e || e.caseId !== c.id) fail('not_found', 404);
+    return e;
   }
 
   async function caseSummary(c) {
@@ -316,11 +334,12 @@ export function createServices(repo, deps) {
       if (type) oneOf(type, EVIDENCE_TYPES, 'type');
       if (verification) oneOf(verification, VERIFICATION, 'verification');
       const query = String(q ?? '').trim().toLocaleLowerCase();
+      const files = await repo.listAttachments({ caseId: c.id });
       return (await repo.listEvidence(c.id))
         .filter((e) => !type || e.type === type)
         .filter((e) => !verification || e.verification === verification)
         .filter((e) => !query || `${e.content} ${e.source ?? ''}`.toLocaleLowerCase().includes(query))
-        .map(evidenceDto);
+        .map((e) => evidenceDto(e, files));
     },
 
     async createEvidence(user, caseId, body = {}) {
@@ -355,7 +374,7 @@ export function createServices(repo, deps) {
       const updated = await repo.updateEvidence(e.id, patch);
       await touch(c);
       await audit(user, 'evidence.update', 'evidence', e.id, c.id);
-      return evidenceDto(updated);
+      return evidenceDto(updated, await repo.listAttachments({ caseId: c.id, evidenceId: e.id }));
     },
 
     async deleteEvidence(user, caseId, evidenceId) {
@@ -365,6 +384,45 @@ export function createServices(repo, deps) {
       await repo.deleteEvidence(e.id);
       await touch(c);
       await audit(user, 'evidence.delete', 'evidence', e.id, c.id);
+    },
+
+    // ---------- attachments (#25) ----------
+    async listAttachments(user, caseId, evidenceId) {
+      const c = await readableCase(user, caseId);
+      const e = await evidenceItem(c, evidenceId);
+      return (await repo.listAttachments({ caseId: c.id, evidenceId: e.id })).map(attachmentDto);
+    },
+
+    async uploadAttachment(user, caseId, evidenceId, body = {}) {
+      const c = await writableCase(user, caseId);
+      const e = await evidenceItem(c, evidenceId);
+      const { filename, mimeType, bytes } = checkUpload(body);
+      const sha256 = await deps.sha256(bytes);
+      if (body.sha256 !== undefined && String(body.sha256).toLowerCase() !== sha256) fail('checksum_mismatch', 400, 'sha256 does not match the uploaded bytes');
+      if ((await repo.listAttachments({ caseId: c.id, evidenceId: e.id })).length >= MAX_FILES_PER_EVIDENCE) fail('too_many_files', 409);
+      const a = await repo.createAttachment({ caseId: c.id, evidenceId: e.id, filename, mimeType, size: bytes.length, sha256, data: bytes, createdBy: user.id, createdAt: now() });
+      await touch(c);
+      await audit(user, 'evidence.attachment.add', 'attachment', a.id, c.id);
+      return attachmentDto(a);
+    },
+
+    /** The stored bytes plus what is needed for download headers. */
+    async attachmentContent(user, caseId, evidenceId, attachmentId) {
+      const c = await readableCase(user, caseId);
+      const e = await evidenceItem(c, evidenceId);
+      const a = await repo.getAttachment(Number(attachmentId));
+      if (!a || a.evidenceId !== e.id) fail('not_found', 404);
+      return { ...attachmentDto(a), data: a.data };
+    },
+
+    async deleteAttachment(user, caseId, evidenceId, attachmentId) {
+      const c = await writableCase(user, caseId);
+      const e = await evidenceItem(c, evidenceId);
+      const a = await repo.getAttachment(Number(attachmentId));
+      if (!a || a.evidenceId !== e.id) fail('not_found', 404);
+      await repo.deleteAttachment(a.id);
+      await touch(c);
+      await audit(user, 'evidence.attachment.delete', 'attachment', a.id, c.id);
     },
 
     // ---------- entities ----------
@@ -482,7 +540,7 @@ export function createServices(repo, deps) {
         format: 'retrace-case/1',
         exportedAt: iso(now()),
         case: await caseSummary(c),
-        evidence: content.evidence.map(evidenceDto),
+        evidence: content.evidence.map((e) => evidenceDto(e, content.files)),
         entities: content.entities.map(entityDto),
         relationships: content.relationships.map(relationshipDto),
         risk: assessRisk(content),
@@ -503,7 +561,7 @@ export function createServices(repo, deps) {
       const content = await caseContent(c.id);
       const snapshot = {
         case: await caseSummary(c),
-        evidence: content.evidence.map(evidenceDto),
+        evidence: content.evidence.map((e) => evidenceDto(e, content.files)),
         entities: content.entities.map(entityDto),
         relationships: content.relationships.map(relationshipDto),
         risk: assessRisk(content),

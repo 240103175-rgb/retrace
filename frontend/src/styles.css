@@ -310,3 +310,11 @@ textarea { resize: vertical; }
 /* #102 profile link on phones (name block is hidden there) */
 .who-icon { display: none; place-items: center; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 8px; text-decoration: none; }
 @media (max-width: 760px) { .who-icon { display: inline-grid; } }
+
+/* #25 evidence files */
+.files { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.file-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; width: 100%; }
+.file-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.file-list code { color: var(--muted); }
+.link-btn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; word-break: break-all; text-align: left; }
+.report-file code { word-break: break-all; }

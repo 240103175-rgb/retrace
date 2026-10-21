@@ -49,6 +49,7 @@ export function CasePage() {
   const [error, setError] = useState<string | null>(null);
   const [tagDraft, setTagDraft] = useState('');
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
+  const guard = useDiscardGuard(); // before any early return: hooks must run in the same order (#105)
   useTitle(c.data?.title ?? T.cases);
 
   // #75 keep the active tab visible on narrow screens.
@@ -96,7 +97,6 @@ export function CasePage() {
 
   const props: CaseTabProps = { caseData: data, editable, owner, onChanged: c.reload, openTab: (t) => setParams({ tab: t }, { replace: true }) };
 
-  const guard = useDiscardGuard();
   const saveTags = async (tags: string[]) => {
     try {
       await api.updateCase(data.id, { tags });

@@ -12,7 +12,7 @@ import { createServices, userDto } from './domain/services.js';
  * @param {() => number} [o.now]
  * @param {string|null} [o.staticDir] built frontend (frontend/dist)
  */
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 
 const CSP = [
   "default-src 'self'",
@@ -55,7 +55,11 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
     }
     next();
   });
-  app.use(express.json({ limit: '100kb' }));
+  // #25 file uploads carry base64 (2 MB file ≈ 2.8 MB text); every other route keeps the small limit.
+  const UPLOAD = /^\/api\/v1\/cases\/[^/]+\/evidence\/[^/]+\/attachments$/;
+  const smallJson = express.json({ limit: '100kb' });
+  const uploadJson = express.json({ limit: '3mb' });
+  app.use((req, res, next) => (UPLOAD.test(req.path) ? uploadJson : smallJson)(req, res, next));
 
   const api = express.Router();
   const h = (fn) => async (req, res, next) => {
@@ -118,6 +122,22 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
   }));
   api.get('/cases/:caseId/evidence', h(async (req, res) => res.json(await svc.listEvidence(req.user, id(req.params.caseId), { q: req.query.q, type: req.query.type || null, verification: req.query.verification || null }))));
   crud('evidence', 'listEvidence', 'createEvidence', 'updateEvidence', 'deleteEvidence');
+  const files = '/cases/:caseId/evidence/:itemId/attachments';
+  const fileArgs = (req) => [req.user, id(req.params.caseId), id(req.params.itemId)];
+  api.get(files, h(async (req, res) => res.json(await svc.listAttachments(...fileArgs(req)))));
+  api.post(files, h(async (req, res) => res.status(201).json(await svc.uploadAttachment(...fileArgs(req), req.body ?? {}))));
+  api.delete(`${files}/:fileId`, h(async (req, res) => (await svc.deleteAttachment(...fileArgs(req), id(req.params.fileId)), res.status(204).end())));
+  api.get(`${files}/:fileId/content`, h(async (req, res) => {
+    const f = await svc.attachmentContent(...fileArgs(req), id(req.params.fileId));
+    // Always a download, never rendered by the browser; the type is the sniffed one stored at upload.
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="file-${f.id}"; filename*=UTF-8''${encodeURIComponent(f.filename)}`,
+      'X-Checksum-SHA256': f.sha256,
+      'Cache-Control': 'private, no-store',
+    });
+    res.send(Buffer.from(f.data));
+  }));
   crud('entities', 'listEntities', 'createEntity', 'updateEntity', 'deleteEntity');
   crud('relationships', 'listRelationships', 'createRelationship', null, 'deleteRelationship');
 
@@ -145,6 +165,9 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, _next) => {
     if (err instanceof AppError) return res.status(err.status).json({ error: { code: err.code, message: err.message } });
+    if (err?.type === 'entity.too.large' && UPLOAD.test(req.path)) {
+      return res.status(413).json({ error: { code: 'file_too_large', message: 'File is larger than 2 MB' } });
+    }
     if (err?.type === 'entity.parse.failed' || err?.type === 'entity.too.large') {
       return res.status(400).json({ error: { code: 'validation_error', message: 'Invalid JSON body' } });
     }

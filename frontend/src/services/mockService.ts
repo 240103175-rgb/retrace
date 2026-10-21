@@ -21,6 +21,8 @@ const mockDeps = (now: () => number) => ({
   hashPassword: async (pw: string) => `mock$${pw}`,
   verifyPassword: async (pw: string, stored: string) => stored === `mock$${pw}`,
   randomToken: () => `mock-${crypto.randomUUID()}`,
+  sha256: async (bytes: Uint8Array) =>
+    [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join(''),
 });
 
 export function createMockService(options: MockOptions = {}): RetraceApi & { failNext(code: ErrorCode, status?: number): void; expireSession(): Promise<void> } {
@@ -103,6 +105,15 @@ export function createMockService(options: MockOptions = {}): RetraceApi & { fai
     createEvidence: (caseId, input) => authed((u) => svc.createEvidence(u, caseId, input)),
     updateEvidence: (caseId, id, patch) => authed((u) => svc.updateEvidence(u, caseId, id, patch)),
     deleteEvidence: (caseId, id) => authed((u) => svc.deleteEvidence(u, caseId, id)),
+
+    listAttachments: (caseId, evidenceId) => authed((u) => svc.listAttachments(u, caseId, evidenceId)),
+    uploadAttachment: (caseId, evidenceId, input) => authed((u) => svc.uploadAttachment(u, caseId, evidenceId, input)),
+    downloadAttachment: (caseId, evidenceId, a) =>
+      authed(async (u) => {
+        const f = await svc.attachmentContent(u, caseId, evidenceId, a.id);
+        return { filename: f.filename, blob: new Blob([f.data], { type: 'application/octet-stream' }) };
+      }),
+    deleteAttachment: (caseId, evidenceId, id) => authed((u) => svc.deleteAttachment(u, caseId, evidenceId, id)),
 
     listEntities: (caseId) => authed((u) => svc.listEntities(u, caseId)),
     createEntity: (caseId, input) => authed((u) => svc.createEntity(u, caseId, input)),

@@ -19,7 +19,9 @@ export function createHttpService(baseUrl = '/api/v1', fetchImpl: typeof fetch =
       const data = await res.json().catch(() => null);
       throw new ApiError((data?.error?.code as ErrorCode | undefined) ?? 'server_error', res.status);
     }
-    const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? filename;
+    const cd = res.headers.get('content-disposition') ?? '';
+    const star = /filename\*=UTF-8''([^;]+)/.exec(cd)?.[1];
+    const name = star ? decodeURIComponent(star) : (/filename="([^"]+)"/.exec(cd)?.[1] ?? filename);
     return { filename: name, blob: await res.blob() };
   }
 
@@ -82,6 +84,11 @@ export function createHttpService(baseUrl = '/api/v1', fetchImpl: typeof fetch =
     createEvidence: (caseId, input) => request('POST', `${c(caseId)}/evidence`, input),
     updateEvidence: (caseId, id, patch) => request('PATCH', `${c(caseId)}/evidence/${id}`, patch),
     deleteEvidence: (caseId, id) => request('DELETE', `${c(caseId)}/evidence/${id}`),
+
+    listAttachments: (caseId, evidenceId) => request('GET', `${c(caseId)}/evidence/${evidenceId}/attachments`),
+    uploadAttachment: (caseId, evidenceId, input) => request('POST', `${c(caseId)}/evidence/${evidenceId}/attachments`, input),
+    downloadAttachment: (caseId, evidenceId, a) => download(`${c(caseId)}/evidence/${evidenceId}/attachments/${a.id}/content`, a.filename),
+    deleteAttachment: (caseId, evidenceId, id) => request('DELETE', `${c(caseId)}/evidence/${evidenceId}/attachments/${id}`),
 
     listEntities: (caseId) => request('GET', `${c(caseId)}/entities`),
     createEntity: (caseId, input) => request('POST', `${c(caseId)}/entities`, input),

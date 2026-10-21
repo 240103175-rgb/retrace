@@ -1,6 +1,8 @@
 // The single service interface the UI uses. Implemented by mockService and httpService.
 import type {
   AdminStats,
+  Attachment,
+  AttachmentInput,
   AuditEvent,
   CaseFilter,
   CaseStatus,
@@ -50,6 +52,11 @@ export interface RetraceApi {
   createEvidence(caseId: number, input: EvidenceInput): Promise<Evidence>;
   updateEvidence(caseId: number, id: number, patch: Partial<EvidenceInput>): Promise<Evidence>;
   deleteEvidence(caseId: number, id: number): Promise<void>;
+
+  listAttachments(caseId: number, evidenceId: number): Promise<Attachment[]>;
+  uploadAttachment(caseId: number, evidenceId: number, input: AttachmentInput): Promise<Attachment>;
+  downloadAttachment(caseId: number, evidenceId: number, attachment: Attachment): Promise<Download>;
+  deleteAttachment(caseId: number, evidenceId: number, id: number): Promise<void>;
 
   listEntities(caseId: number): Promise<Entity[]>;
   createEntity(caseId: number, input: EntityInput): Promise<Entity>;

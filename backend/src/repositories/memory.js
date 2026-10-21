@@ -5,7 +5,7 @@ const clone = (row) => (row == null ? null : structuredClone(row));
 
 export function createMemoryRepository() {
   let nextId = 1;
-  const t = { users: [], sessions: new Map(), cases: [], evidence: [], entities: [], relationships: [], reports: [], audit: [] };
+  const t = { users: [], sessions: new Map(), cases: [], evidence: [], entities: [], relationships: [], reports: [], audit: [], files: [] };
   const byId = (list, id) => list.find((x) => x.id === id);
   const insert = (list, row) => {
     const r = { id: nextId++, ...row };
@@ -84,7 +84,26 @@ export function createMemoryRepository() {
     },
     async deleteEvidence(id) {
       t.evidence = t.evidence.filter((e) => e.id !== id);
+      t.files = t.files.filter((a) => a.evidenceId !== id);
       for (const r of t.relationships) r.evidenceIds = r.evidenceIds.filter((x) => x !== id);
+    },
+
+    // #25 attachments; lists never include the bytes.
+    async createAttachment(a) {
+      if (!byId(t.evidence, a.evidenceId)) throw new Error('FOREIGN KEY constraint failed');
+      const { data, ...meta } = insert(t.files, { ...a, data: new Uint8Array(a.data) });
+      return meta;
+    },
+    async listAttachments({ caseId, evidenceId = null }) {
+      return t.files
+        .filter((a) => a.caseId === caseId && (evidenceId == null || a.evidenceId === evidenceId))
+        .map(({ data, ...meta }) => clone(meta));
+    },
+    async getAttachment(id) {
+      return clone(byId(t.files, id));
+    },
+    async deleteAttachment(id) {
+      t.files = t.files.filter((a) => a.id !== id);
     },
 
     async listEntities(caseId) {

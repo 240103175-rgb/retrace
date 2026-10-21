@@ -1,11 +1,11 @@
 // v1.1 group A: health, headers, request log, 415, login limit, pagination, config, migrations.
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { DataTypes, Sequelize } from 'sequelize';
-import { createApp } from '../src/app.js';
+import { VERSION, createApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { nodeDeps } from '../src/crypto.js';
 import { createServices, LOGIN_WINDOW_MS } from '../src/domain/services.js';
@@ -37,7 +37,8 @@ describe('HTTP hardening (#33 #34 #35 #41 #42 #43)', () => {
   it('#33 health is public and names the storage', async () => {
     const { res, body } = await get('/api/v1/health', false);
     assert.equal(res.status, 200);
-    assert.deepEqual(body, { status: 'ok', storage: 'memory', version: '1.1.0' });
+    assert.deepEqual(body, { status: 'ok', storage: 'memory', version: VERSION });
+    assert.match(readFileSync(new URL('../../openapi.yml', import.meta.url), 'utf8'), new RegExp(`\\n  version: ${VERSION.replace(/\./g, '\\.')}\\n`)); // contract and server agree
   });
 
   it('#34 security headers on API responses', async () => {

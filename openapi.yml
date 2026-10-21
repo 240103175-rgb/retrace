@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Re:Trace API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Organise investigations of suspected online scams.
     Access: an investigator sees only their own cases — another investigator's case answers 404 so
@@ -277,6 +277,64 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /cases/{caseId}/evidence/{itemId}/attachments:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }]
+    get:
+      summary: Files attached to evidence (metadata only)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Attachment' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Attach a file (base64 in JSON); the server stores its SHA-256
+      description: |
+        PNG, JPEG, WebP, PDF or UTF-8 text; the bytes must match the declared type. At most 2 MB per file
+        and 10 files per evidence. If `sha256` is sent it must equal the checksum of the decoded bytes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, mimeType, dataBase64]
+              properties:
+                filename: { type: string, minLength: 1, maxLength: 200 }
+                mimeType: { type: string, enum: [image/png, image/jpeg, image/webp, application/pdf, text/plain] }
+                dataBase64: { type: string, minLength: 1 }
+                sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      responses:
+        '201': { description: Stored, content: { application/json: { schema: { $ref: '#/components/schemas/Attachment' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
+  /cases/{caseId}/evidence/{itemId}/attachments/{attachmentId}:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }, { $ref: '#/components/parameters/AttachmentId' }]
+    delete:
+      summary: Remove a file
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /cases/{caseId}/evidence/{itemId}/attachments/{attachmentId}/content:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }, { $ref: '#/components/parameters/AttachmentId' }]
+    get:
+      summary: Download the file (always as an attachment, never rendered inline)
+      responses:
+        '200':
+          description: The stored bytes; header `X-Checksum-SHA256` carries the checksum
+          content:
+            application/octet-stream: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /cases/{caseId}/entities:
     parameters: [{ $ref: '#/components/parameters/CaseId' }]
     get:
@@ -484,6 +542,7 @@ components:
   parameters:
     CaseId: { name: caseId, in: path, required: true, schema: { type: integer, minimum: 1 } }
     ItemId: { name: itemId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    AttachmentId: { name: attachmentId, in: path, required: true, schema: { type: integer, minimum: 1 } }
     Q: { name: q, in: query, description: 'Case-insensitive search in title and description', schema: { type: string, maxLength: 100 } }
     Status: { name: status, in: query, schema: { $ref: '#/components/schemas/CaseStatus' } }
     Sort: { name: sort, in: query, schema: { type: string, enum: [updated, created, title, risk], default: updated } }
@@ -492,13 +551,14 @@ components:
     Tag: { name: tag, in: query, description: 'Only cases with this tag', schema: { type: string, maxLength: 30 } }
 
   responses:
-    BadRequest: { description: 'validation_error, invalid_relationship, wrong_password', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    BadRequest: { description: 'validation_error, invalid_relationship, wrong_password, checksum_mismatch', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Unauthorized: { description: 'unauthorized, invalid_credentials', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Forbidden: { description: forbidden, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     NotFound: { description: not_found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     TooMany: { description: too_many_attempts, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-    UnsupportedMedia: { description: unsupported_media_type, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-    Conflict: { description: 'email_taken, case_locked, last_admin, duplicate_entity, duplicate_relationship, self_action', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    TooLarge: { description: file_too_large, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    UnsupportedMedia: { description: 'unsupported_media_type, unsupported_file', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Conflict: { description: 'email_taken, case_locked, last_admin, duplicate_entity, duplicate_relationship, self_action, too_many_files', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   schemas:
     Error:
@@ -509,7 +569,7 @@ components:
           type: object
           required: [code, message]
           properties:
-            code: { type: string, enum: [validation_error, unauthorized, invalid_credentials, email_taken, forbidden, not_found, case_locked, invalid_relationship, last_admin, too_many_attempts, unsupported_media_type, duplicate_entity, duplicate_relationship, wrong_password, account_disabled, self_action, server_error] }
+            code: { type: string, enum: [validation_error, unauthorized, invalid_credentials, email_taken, forbidden, not_found, case_locked, invalid_relationship, last_admin, too_many_attempts, unsupported_media_type, duplicate_entity, duplicate_relationship, wrong_password, account_disabled, self_action, unsupported_file, file_too_large, too_many_files, checksum_mismatch, server_error] }
             message: { type: string }
 
     Role: { type: string, enum: [investigator, admin] }
@@ -571,6 +631,21 @@ components:
         observedOn: { type: [string, 'null'], format: date }
         amount: { type: [integer, 'null'], minimum: 0 }
         verification: { $ref: '#/components/schemas/Verification' }
+        createdAt: { type: string, format: date-time }
+        attachments: { type: array, items: { $ref: '#/components/schemas/Attachment' }, description: 'Files (metadata); present in lists, exports and report snapshots' }
+
+    Attachment:
+      type: object
+      required: [id, evidenceId, caseId, filename, mimeType, size, sha256, createdAt]
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        evidenceId: { type: integer }
+        caseId: { type: integer }
+        filename: { type: string }
+        mimeType: { type: string }
+        size: { type: integer, minimum: 1, maximum: 2097152 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         createdAt: { type: string, format: date-time }
 
     EvidenceInput:

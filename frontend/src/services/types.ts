@@ -33,6 +33,10 @@ export type ErrorCode =
   | 'duplicate_entity'
   | 'duplicate_relationship'
   | 'wrong_password'
+  | 'unsupported_file'
+  | 'file_too_large'
+  | 'too_many_files'
+  | 'checksum_mismatch'
   | 'account_disabled'
   | 'self_action'
   | 'network'
@@ -80,6 +84,28 @@ export interface Evidence {
   amount: number | null;
   verification: Verification;
   createdAt: string;
+  /** Files (metadata only); present in lists, exports and report snapshots (#25). */
+  attachments?: Attachment[];
+}
+
+export type FileType = 'image/png' | 'image/jpeg' | 'image/webp' | 'application/pdf' | 'text/plain';
+
+export interface Attachment {
+  id: number;
+  evidenceId: number;
+  caseId: number;
+  filename: string;
+  mimeType: string;
+  size: number;
+  sha256: string;
+  createdAt: string;
+}
+
+export interface AttachmentInput {
+  filename: string;
+  mimeType: FileType;
+  dataBase64: string;
+  sha256?: string;
 }
 
 export interface EvidenceInput {

@@ -6,6 +6,7 @@ import { errorKey, useAsync } from '../lib/useAsync';
 import type { CaseTabProps } from '../pages/CasePage';
 import { useApi } from '../services/ApiContext';
 import type { Evidence, EvidenceType, Verification } from '../services/types';
+import { Attachments } from './Attachments';
 import { CharCounter, useConfirm, useDiscardGuard, useUnsavedWarning } from './kit';
 import { Empty, ErrorBox, Field, FormError, Loading, VerificationPill } from './ui';
 
@@ -194,6 +195,7 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
                   {T.source}: {e.source}
                 </p>
               )}
+              <Attachments caseId={caseData.id} evidenceId={e.id} files={e.attachments ?? []} editable={editable} onChanged={() => (list.reload(), onChanged())} />
               {editable && (
                 <div className="item-actions">
                   <button type="button" className="btn btn-ghost btn-xs" onClick={() => open(e)}>

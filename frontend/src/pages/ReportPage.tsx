@@ -64,6 +64,11 @@ export function ReportPage() {
                     {e.content}
                     {e.amount != null && ` (${money(e.amount)})`}
                     {e.source && <div className="small">{e.source}</div>}
+                    {e.attachments?.map((a) => (
+                      <div key={a.id} className="small report-file">
+                        📎 {a.filename} · SHA-256 <code>{a.sha256}</code>
+                      </div>
+                    ))}
                   </td>
                   <td>{VERIFICATION[e.verification]}</td>
                 </tr>
