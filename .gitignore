@@ -5,3 +5,10 @@ data/
 .DS_Store
 dist/
 .claude/
+playwright-report/
+test-results/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example

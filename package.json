@@ -2,7 +2,7 @@
   "name": "retrace",
   "version": "1.0.0",
   "private": true,
-  "description": "Re:Trace \u2014 organise investigations of suspected online scams",
+  "description": "Re:Trace — organise investigations of suspected online scams",
   "workspaces": [
     "backend",
     "frontend"
@@ -16,6 +16,11 @@
     "start": "npm start -w backend",
     "test": "npm test -w backend && npm test -w frontend",
     "validate:api": "npm run validate:api -w backend",
-    "db:reset": "npm run db:reset -w backend"
+    "db:reset": "npm run db:reset -w backend",
+    "test:integration": "node --test tests/integration/*.test.mjs",
+    "e2e": "playwright test --config e2e/playwright.config.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
   }
 }

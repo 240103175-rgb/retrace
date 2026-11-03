@@ -15,9 +15,9 @@ try {
 }
 
 const repo = config.storage === 'memory' ? createMemoryRepository() : await createSqlRepository(config.databaseUrl);
-if (!config.production && (await seed(repo, { hashPassword }))) console.log('Seeded synthetic demo data.');
+if (config.seedDemo && (await seed(repo, { hashPassword, adminPassword: config.adminPassword }))) console.log('Seeded synthetic demo data.');
 
-const app = createApp({ repo, staticDir: fileURLToPath(new URL('../../frontend/dist', import.meta.url)) });
+const app = createApp({ repo, staticDir: process.env.STATIC_DIR || fileURLToPath(new URL('../../frontend/dist', import.meta.url)) });
 const server = app.listen(config.port, (err) => {
   if (err) {
     console.error(`Cannot start on port ${config.port}: ${err.message}`);

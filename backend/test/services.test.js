@@ -24,6 +24,20 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       assert.equal(await svc.userFromToken(r.token), null);
     });
 
+    it('#106 seeds the admin with ADMIN_PASSWORD instead of the demo password', async () => {
+      const { nodeDeps } = await import('../src/crypto.js');
+      const { createServices } = await import('../src/domain/services.js');
+      const { seed } = await import('../src/domain/seedData.js');
+      const repo = await makeRepo();
+      const deps = nodeDeps();
+      await seed(repo, { hashPassword: deps.hashPassword, adminPassword: 'a-long-secret-pass' });
+      const svc = createServices(repo, deps);
+      await rejects(svc.login({ email: 'admin@retrace.test', password: DEMO_PASSWORD }), 'invalid_credentials');
+      assert.equal((await svc.login({ email: 'admin@retrace.test', password: 'a-long-secret-pass' })).user.role, 'admin');
+      assert.equal((await svc.login({ email: 'aigerim@retrace.test', password: DEMO_PASSWORD })).user.role, 'investigator');
+      await repo.close();
+    });
+
     it('shows an investigator only their own cases, filtered and sorted', async () => {
       const { svc, users } = await setup(makeRepo);
       const mine = await svc.listCases(users.aigerim, {});

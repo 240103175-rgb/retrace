@@ -1,0 +1,20 @@
+#!/bin/bash
+# Runs on every boot: install Docker once, write the compose stack, start it.
+set -euo pipefail
+if ! command -v docker >/dev/null; then
+  curl -fsSL https://get.docker.com | sh
+  fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
+fi
+mkdir -p /opt/retrace && cd /opt/retrace
+curl -fsSL "https://raw.githubusercontent.com/${repo}/${git_ref}/deploy/compose.prod.yaml" -o compose.yaml
+IP=$(curl -s -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip)
+umask 077
+cat > .env <<ENV
+APP_IMAGE=${app_image}
+POSTGRES_PASSWORD=${postgres_password}
+ADMIN_PASSWORD=${admin_password}
+SEED_DEMO=${seed_demo}
+SITE_ADDRESS=$(echo "$IP" | tr . -).sslip.io
+ENV
+docker compose pull
+docker compose up -d

@@ -74,11 +74,12 @@ const CASES = [
 ];
 
 /** Fills an empty repository with demo users and cases. Returns false if users already exist. */
-export async function seed(repo, { hashPassword, now = Date.now() }) {
+export async function seed(repo, { hashPassword, now = Date.now(), adminPassword = null }) {
   if ((await repo.listUsers()).length > 0) return false;
   const users = {};
   const hash = await hashPassword(DEMO_PASSWORD);
-  for (const u of DEMO_USERS) users[u.email] = await repo.createUser({ ...u, passwordHash: hash, createdAt: now - 30 * DAY });
+  const adminHash = adminPassword ? await hashPassword(adminPassword) : hash;
+  for (const u of DEMO_USERS) users[u.email] = await repo.createUser({ ...u, passwordHash: u.role === 'admin' ? adminHash : hash, createdAt: now - 30 * DAY });
   for (const c of CASES) {
     const at = now - c.daysAgo * DAY;
     const created = await repo.createCase({ ownerId: users[c.owner].id, title: c.title, description: c.description, status: c.status, createdAt: at, updatedAt: at });

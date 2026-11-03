@@ -149,7 +149,11 @@ export async function createSqlRepository(url = process.env.DATABASE_URL || DEFA
   if (storage && storage !== ':memory:') mkdirSync(dirname(storage), { recursive: true });
   const sequelize = storage
     ? new Sequelize({ dialect: 'sqlite', storage, logging: false, ...(storage === ':memory:' ? { pool: { max: 1 } } : {}) })
-    : new Sequelize(url, { logging: false });
+    : new Sequelize(url, {
+        logging: false,
+        // Hosted PostgreSQL (Railway, Render external URLs) asks for TLS with ?sslmode=require.
+        ...(/[?&]sslmode=(require|verify-ca|verify-full)\b/.test(url) ? { dialectOptions: { ssl: { require: true, rejectUnauthorized: false } } } : {}),
+      });
   if (sequelize.getDialect() === 'sqlite') await sequelize.query('PRAGMA foreign_keys = ON;');
   const m = defineModels(sequelize);
   await sequelize.sync({ force: reset });

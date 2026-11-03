@@ -20,6 +20,12 @@ npm run build
 npm start          # http://localhost:3200 — API + app, SQLite in backend/data/retrace.db, synthetic demo data on first start
 ```
 
+With Docker (app + PostgreSQL, the way it is deployed):
+
+```bash
+docker compose up --build    # http://localhost:3200
+```
+
 Development with hot reload (API :3200, Vite :5174 with a proxy):
 
 ```bash
@@ -65,6 +71,9 @@ npm run db:reset -w backend        # recreate the SQLite demo database
 | `_docs/threat-model.md`, `_docs/release-checklist.md` | Security and release |
 | `_docs/deploy-postgres.md` | Running on PostgreSQL |
 | `mobile/README.md` | Expo app sharing the web API client |
+| `_docs/deploy.md`, `deploy/aws/`, `deploy/gcp/` | Docker, Render/Railway, AWS CloudFormation, Google Cloud Terraform |
+| `_docs/ci-cd.md` | Pipeline: tests → Docker Compose integration + Playwright e2e → publish → deploy |
+| `e2e/README.md` | Playwright specs, one per feature |
 | `_docs/user-guide.md` | Руководство пользователя (RU) |
 | `CHANGELOG.md` | Versions |
 | `openapi.yml` | API contract |

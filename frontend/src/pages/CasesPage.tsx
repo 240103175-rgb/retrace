@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { CharCounter, useTitle } from '../components/kit';
 import { Empty, ErrorBox, Field, FormError, Loading, RiskBadge, StatusPill } from '../components/ui';
@@ -99,12 +99,17 @@ export function useCaseFilters() {
   const status = (params.get('status') as CaseStatus | null) || null;
   const sort = (params.get('sort') as CaseSort | null) ?? 'updated';
   const tag = params.get('tag');
+  // #133 build on the latest params, not the ones captured at render: quick changes must compose.
+  // (React Router 6 passes the render-time params even to a functional updater.)
+  const latest = useRef(params);
+  latest.current = params;
   const onChange = (next: { q?: string; status?: CaseStatus | null; sort?: CaseSort; tag?: string | null }) => {
-    const p = new URLSearchParams(params);
+    const p = new URLSearchParams(latest.current);
     for (const [k, v] of Object.entries(next)) {
       if (v) p.set(k, String(v));
       else p.delete(k);
     }
+    latest.current = p;
     setParams(p, { replace: true });
   };
   return { q, status, sort, tag, onChange };

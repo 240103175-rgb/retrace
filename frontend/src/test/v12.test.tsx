@@ -178,3 +178,20 @@ describe('#27 collaborative investigations', () => {
     expect((await api.listEvidence(olx.id)).find((x) => x.id === ev.id)!.content).toBe('Моя правка');
   });
 });
+
+describe('#133 case filters compose', () => {
+  it('two quick changes keep both', async () => {
+    const { renderHook, act: hookAct } = await import('@testing-library/react');
+    const { useCaseFilters } = await import('../pages/CasesPage');
+    const { useLocation } = await import('react-router-dom');
+    const { result } = renderHook(() => ({ f: useCaseFilters(), loc: useLocation() }), {
+      wrapper: ({ children }) => <MemoryRouter initialEntries={['/cases?q=old']}>{children}</MemoryRouter>,
+    });
+    hookAct(() => {
+      result.current.f.onChange({ q: 'фишинг' });
+      result.current.f.onChange({ status: 'open' });
+    });
+    const p = new URLSearchParams(result.current.loc.search);
+    expect([p.get('q'), p.get('status')]).toEqual(['фишинг', 'open']);
+  });
+});

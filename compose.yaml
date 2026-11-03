@@ -1,0 +1,36 @@
+# Re:Trace with PostgreSQL (#108): `docker compose up --build` → http://localhost:3200
+# Values come from .env (see .env.example); the defaults below are for a local demo only.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-retrace}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-retrace-local}
+      POSTGRES_DB: ${POSTGRES_DB:-retrace}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    image: ${APP_IMAGE:-retrace:local}
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3200
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-retrace}:${POSTGRES_PASSWORD:-retrace-local}@db:5432/${POSTGRES_DB:-retrace}
+      SEED_DEMO: ${SEED_DEMO:-true}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    ports:
+      - '${APP_PORT:-3200}:3200'
+
+volumes:
+  pgdata:

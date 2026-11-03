@@ -104,7 +104,13 @@ describe('login attempt limit (#39)', () => {
 
 describe('configuration (#37)', () => {
   it('validates PORT and STORAGE with defaults', () => {
-    assert.deepEqual(loadConfig({}), { port: 3200, storage: 'sql', databaseUrl: 'sqlite:data/retrace.db', production: false });
+    assert.deepEqual(loadConfig({}), { port: 3200, storage: 'sql', databaseUrl: 'sqlite:data/retrace.db', production: false, seedDemo: true, adminPassword: null });
+    // #106 demo data: off in production unless asked for; a short admin password is refused.
+    assert.equal(loadConfig({ NODE_ENV: 'production' }).seedDemo, false);
+    assert.equal(loadConfig({ NODE_ENV: 'production', SEED_DEMO: 'true' }).seedDemo, true);
+    assert.equal(loadConfig({ SEED_DEMO: 'false' }).seedDemo, false);
+    assert.throws(() => loadConfig({ ADMIN_PASSWORD: 'short' }), /ADMIN_PASSWORD/);
+    assert.equal(loadConfig({ ADMIN_PASSWORD: 'a-long-secret-pass' }).adminPassword, 'a-long-secret-pass');
     assert.equal(loadConfig({ PORT: '8080', STORAGE: 'memory' }).port, 8080);
     assert.throws(() => loadConfig({ PORT: 'abc' }), /PORT must be an integer 1–65535/);
     assert.throws(() => loadConfig({ PORT: '0' }), /PORT/);
