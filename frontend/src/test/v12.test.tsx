@@ -129,3 +129,52 @@ describe('#26 branded PDF', () => {
     expect(css).toMatch(/@page \{[^]*counter\(page\)[^]*counter\(pages\)/);
   });
 });
+
+describe('#27 collaborative investigations', () => {
+  it('owner shares a case and the viewer sees it read-only', async () => {
+    renderApp('/login?next=/cases');
+    await signIn();
+    await openCase(/OLX/);
+    const panel = within(await screen.findByTestId('members'));
+    expect(panel.getByText('Дело видно только вам.')).toBeInTheDocument();
+    await userEvent.type(panel.getByLabelText('Email следователя'), 'nobody@retrace.test');
+    await userEvent.click(panel.getByRole('button', { name: 'Добавить участника' }));
+    expect(await panel.findByText('Следователь с таким email не найден')).toBeInTheDocument();
+    await userEvent.clear(panel.getByLabelText('Email следователя'));
+    await userEvent.type(panel.getByLabelText('Email следователя'), 'daniyar@retrace.test');
+    await userEvent.click(panel.getByRole('button', { name: 'Добавить участника' }));
+    expect(await panel.findByText('Данияр Сеитов')).toBeInTheDocument();
+
+    // Daniyar signs in on the same mock: viewer first.
+    await userEvent.click(screen.getByRole('button', { name: 'Выйти' }));
+    await signIn('daniyar@retrace.test');
+    expect(await screen.findByText(/Совместное: Айгерим Нурланова \(Наблюдатель\)/)).toBeInTheDocument();
+    await openCase(/OLX/, 'Доказательства');
+    expect(screen.getByText('Вы наблюдатель: дело можно только просматривать.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^\+ Добавить$/ })).toBeNull();
+    expect(screen.queryByLabelText('Статус')).toBeNull();
+
+  });
+
+  it('shows a conflict when someone else saved the same evidence first', async () => {
+    const api = renderApp('/login?next=/cases');
+    await signIn();
+    await openCase(/OLX/, 'Доказательства');
+    await waitFor(() => expect(screen.getAllByTestId('evidence-row')).toHaveLength(3));
+    const row = screen.getAllByTestId('evidence-row')[0];
+    await userEvent.click(within(row).getByRole('button', { name: 'Изменить' }));
+    // Another session saves the same item in the meantime.
+    const olx = (await api.listCases()).find((c) => c.title.includes('OLX'))!;
+    const ev = (await api.listEvidence(olx.id))[0];
+    await api.updateEvidence(olx.id, ev.id, { content: 'Чужая правка', version: ev.version });
+    const content = screen.getByLabelText('Содержание');
+    await userEvent.clear(content);
+    await userEvent.type(content, 'Моя правка');
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(await screen.findByText(/Запись только что изменил другой участник/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Содержание')).toHaveValue('Моя правка');
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(screen.queryByLabelText('Содержание')).toBeNull());
+    expect((await api.listEvidence(olx.id)).find((x) => x.id === ev.id)!.content).toBe('Моя правка');
+  });
+});

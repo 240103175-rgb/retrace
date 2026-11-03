@@ -6,6 +6,7 @@ import { GraphTab } from '../components/GraphTab';
 import { ReportsTab } from '../components/ReportsTab';
 import { RiskTab } from '../components/RiskTab';
 import { CaseSummaryDraft } from '../components/SummaryView';
+import { Members } from '../components/Members';
 import { CharCounter, hasUnsavedForms, saveDownload, useDiscardGuard, useTitle } from '../components/kit';
 import { ErrorBox, Field, FormError, Loading, RiskBadge, StatusPill, VerificationPill } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -29,10 +30,12 @@ const TAB_LABEL: Record<Tab, string> = {
 
 export interface CaseTabProps {
   caseData: CaseSummary;
-  /** Owner and the case is not closed/archived. */
+  /** Owner or editor, and the case is not closed/archived. */
   editable: boolean;
   /** The signed-in user owns the case. */
   owner: boolean;
+  /** Owner or editor (#27): may change content and make reports. */
+  canEdit?: boolean;
   onChanged(): void;
   openTab?(tab: Tab): void;
 }
@@ -70,9 +73,11 @@ export function CasePage() {
   }
   if (!c.data) return <Loading />;
   const data = c.data;
-  const owner = data.ownerId === user?.id;
+  const access = data.access ?? (data.ownerId === user?.id ? 'owner' : 'admin');
+  const owner = access === 'owner';
+  const canEdit = owner || access === 'editor';
   const locked = data.status === 'closed' || data.status === 'archived';
-  const editable = owner && !locked;
+  const editable = canEdit && !locked;
 
   const setStatus = async (status: CaseStatus) => {
     try {
@@ -87,16 +92,17 @@ export function CasePage() {
   const saveDetails = async () => {
     setError(null);
     try {
-      await api.updateCase(data.id, form);
+      await api.updateCase(data.id, { ...form, version: data.version });
       setEditing(false);
       toast('ok', T.ok_saved);
       c.reload();
     } catch (err) {
       setError(t(errorKey(err)));
+      if (errorKey(err) === 'err_edit_conflict') c.reload();
     }
   };
 
-  const props: CaseTabProps = { caseData: data, editable, owner, onChanged: c.reload, openTab: (t) => setParams({ tab: t }, { replace: true }) };
+  const props: CaseTabProps = { caseData: data, editable, owner, canEdit, onChanged: c.reload, openTab: (t) => setParams({ tab: t }, { replace: true }) };
 
   const saveTags = async (tags: string[]) => {
     try {
@@ -150,7 +156,7 @@ export function CasePage() {
           <>
             <div className="case-title">
               <h1>{data.title}</h1>
-              {editable && (
+              {owner && !locked && (
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"
@@ -169,6 +175,7 @@ export function CasePage() {
           <span className="muted">
             {T.owner}: {data.ownerName} · {T.updated} {dateTime(data.updatedAt)}
           </span>
+          {(access === 'editor' || access === 'viewer') && <span className="pill status-in_review">{access === 'editor' ? T.editor : T.viewer}</span>}
           {owner && (
             <select aria-label={T.status} value={data.status} onChange={(e) => void setStatus(e.target.value as CaseStatus)}>
               {(Object.keys(STATUS) as CaseStatus[]).map((s) => (
@@ -210,8 +217,10 @@ export function CasePage() {
             {T.exportCsv}
           </button>
         </div>
-        {owner && locked && <div className="notice">{T.locked}</div>}
-        {!owner && <div className="notice">{T.readOnly}</div>}
+        {canEdit && locked && <div className="notice">{T.locked}</div>}
+        {access === 'admin' && <div className="notice">{T.readOnly}</div>}
+        {access === 'viewer' && <div className="notice">{T.readOnlyViewer}</div>}
+        {access === 'editor' && !locked && <div className="notice">{T.editorNote}</div>}
       </section>
 
       <nav className="tabs" role="tablist">
@@ -255,11 +264,12 @@ function Overview({ caseData, editable, onChanged, openTab }: CaseTabProps) {
   const [notes, setNotes] = useState(caseData.notes ?? '');
   const saveNotes = async () => {
     try {
-      await api.updateCase(caseData.id, { notes });
+      await api.updateCase(caseData.id, { notes, version: caseData.version });
       toast('ok', T.ok_saved);
       onChanged();
     } catch (err) {
       toast('err', t(errorKey(err)));
+      if (errorKey(err) === 'err_edit_conflict') onChanged(); // fetch the newer version; the typed notes stay
     }
   };
   const empty = caseData.evidenceCount === 0 && caseData.entityCount === 0;
@@ -310,6 +320,12 @@ function Overview({ caseData, editable, onChanged, openTab }: CaseTabProps) {
           {T.risk}
         </div>
       </div>
+      {caseData.access && caseData.access !== 'admin' && (
+        <>
+          <h2>{T.members}</h2>
+          <Members caseData={caseData} onChanged={onChanged} />
+        </>
+      )}
       <h2>{T.summaryDraft}</h2>
       <CaseSummaryDraft caseId={caseData.id} version={caseData.updatedAt} onCite={(kind, id) => cite(openTab, kind, id)} />
       <h2>{T.notes}</h2>

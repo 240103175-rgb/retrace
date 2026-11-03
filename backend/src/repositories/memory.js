@@ -5,7 +5,7 @@ const clone = (row) => (row == null ? null : structuredClone(row));
 
 export function createMemoryRepository() {
   let nextId = 1;
-  const t = { users: [], sessions: new Map(), cases: [], evidence: [], entities: [], relationships: [], reports: [], audit: [], files: [] };
+  const t = { users: [], sessions: new Map(), cases: [], evidence: [], entities: [], relationships: [], reports: [], audit: [], files: [], members: [] };
   const byId = (list, id) => list.find((x) => x.id === id);
   const insert = (list, row) => {
     const r = { id: nextId++, ...row };
@@ -55,7 +55,7 @@ export function createMemoryRepository() {
 
     async createCase(c) {
       if (!byId(t.users, c.ownerId)) throw new Error('FOREIGN KEY constraint failed');
-      return insert(t.cases, { tags: [], notes: null, ...c });
+      return insert(t.cases, { tags: [], notes: null, version: 1, ...c });
     },
     async getCase(id) {
       return clone(byId(t.cases, id));
@@ -77,7 +77,7 @@ export function createMemoryRepository() {
       return clone(byId(t.evidence, id));
     },
     async createEvidence(e) {
-      return insert(t.evidence, e);
+      return insert(t.evidence, { version: 1, ...e });
     },
     async updateEvidence(id, p) {
       return patch(t.evidence, id, p);
@@ -106,6 +106,29 @@ export function createMemoryRepository() {
       t.files = t.files.filter((a) => a.id !== id);
     },
 
+    // #27 sharing
+    async addMember(m) {
+      if (t.members.some((x) => x.caseId === m.caseId && x.userId === m.userId)) throw new Error('UNIQUE constraint failed: case_members');
+      return insert(t.members, m);
+    },
+    async listMembers(caseId) {
+      return t.members.filter((x) => x.caseId === caseId).map(clone);
+    },
+    async getMember(caseId, userId) {
+      return clone(t.members.find((x) => x.caseId === caseId && x.userId === userId));
+    },
+    async listMemberships(userId) {
+      return t.members.filter((x) => x.userId === userId).map(clone);
+    },
+    async updateMember(caseId, userId, p) {
+      const r = t.members.find((x) => x.caseId === caseId && x.userId === userId);
+      Object.assign(r, p);
+      return clone(r);
+    },
+    async removeMember(caseId, userId) {
+      t.members = t.members.filter((x) => !(x.caseId === caseId && x.userId === userId));
+    },
+
     async listEntities(caseId) {
       return t.entities.filter((e) => e.caseId === caseId).map(clone);
     },
@@ -113,7 +136,7 @@ export function createMemoryRepository() {
       return clone(byId(t.entities, id));
     },
     async createEntity(e) {
-      return insert(t.entities, e);
+      return insert(t.entities, { version: 1, ...e });
     },
     async updateEntity(id, p) {
       return patch(t.entities, id, p);

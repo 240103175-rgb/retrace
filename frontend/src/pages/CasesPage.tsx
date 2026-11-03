@@ -20,6 +20,7 @@ export function CaseTable({ cases, showOwner = false, onTag }: { cases: CaseSumm
               <span className="muted">
                 {c.evidenceCount} {plural(c.evidenceCount, EVIDENCE_FORMS)} · {T.updated} {dateTime(c.updatedAt)}
                 {showOwner && ` · ${c.ownerName}`}
+                {(c.access === 'editor' || c.access === 'viewer') && ` · ${T.shared}: ${c.ownerName} (${c.access === 'editor' ? T.editor : T.viewer})`}
               </span>
               {c.tags.length > 0 && (
                 <span className="tag-row">

@@ -37,6 +37,9 @@ export type ErrorCode =
   | 'file_too_large'
   | 'too_many_files'
   | 'checksum_mismatch'
+  | 'user_not_found'
+  | 'already_member'
+  | 'edit_conflict'
   | 'account_disabled'
   | 'self_action'
   | 'network'
@@ -72,6 +75,20 @@ export interface CaseSummary {
   relationshipCount: number;
   riskScore: number;
   riskLevel: RiskLevel;
+  /** #27 */
+  version?: number;
+  memberCount?: number;
+  access?: Access;
+}
+
+export type Access = 'owner' | 'editor' | 'viewer' | 'admin';
+export type MemberRole = 'editor' | 'viewer';
+export interface Member {
+  userId: number;
+  name: string;
+  email: string;
+  role: MemberRole;
+  addedAt: string;
 }
 
 export interface Evidence {
@@ -84,6 +101,7 @@ export interface Evidence {
   amount: number | null;
   verification: Verification;
   createdAt: string;
+  version?: number;
   /** Files (metadata only); present in lists, exports and report snapshots (#25). */
   attachments?: Attachment[];
 }
@@ -123,6 +141,7 @@ export interface Entity {
   type: EntityType;
   label: string;
   note: string | null;
+  version?: number;
 }
 
 export interface SummaryStatement {

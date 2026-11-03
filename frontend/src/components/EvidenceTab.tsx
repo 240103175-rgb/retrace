@@ -32,6 +32,7 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
   const guard = useDiscardGuard();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingVersion, setEditingVersion] = useState<number | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [initial, setInitial] = useState<Draft | null>(null);
@@ -41,6 +42,7 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
   const open = (e?: Evidence) => {
     setError(null);
     setEditingId(e?.id ?? null);
+    setEditingVersion(e?.version);
     const d: Draft = e
       ? { type: e.type, content: e.content, source: e.source ?? '', observedOn: e.observedOn ?? '', amount: e.amount == null ? '' : String(e.amount), verification: e.verification }
       : EMPTY;
@@ -70,7 +72,7 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
       verification: draft.verification,
     };
     try {
-      if (editingId) await api.updateEvidence(caseData.id, editingId, body);
+      if (editingId) await api.updateEvidence(caseData.id, editingId, { ...body, version: editingVersion });
       else await api.createEvidence(caseData.id, body);
       toast('ok', editingId ? T.ok_saved : T.ok_created);
       setDraft(null);
@@ -78,6 +80,12 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
       onChanged();
     } catch (err) {
       setError(t(errorKey(err)));
+      if (editingId && errorKey(err) === 'err_edit_conflict') {
+        // #27 someone saved first: show their version in the list, keep this draft, accept the next save.
+        const fresh = (await api.listEvidence(caseData.id)).find((x) => x.id === editingId);
+        setEditingVersion(fresh?.version);
+        list.reload();
+      }
     } finally {
       setBusy(false);
     }

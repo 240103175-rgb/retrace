@@ -77,6 +77,10 @@ export function createHttpService(baseUrl = '/api/v1', fetchImpl: typeof fetch =
     createCase: (input) => request('POST', '/cases', input),
     getCase: (id) => request('GET', c(id)),
     updateCase: (id, patch) => request('PATCH', c(id), patch),
+    listMembers: (caseId) => request('GET', `${c(caseId)}/members`),
+    addMember: (caseId, input) => request('POST', `${c(caseId)}/members`, input),
+    updateMember: (caseId, userId, input) => request('PATCH', `${c(caseId)}/members/${userId}`, input),
+    removeMember: (caseId, userId) => request('DELETE', `${c(caseId)}/members/${userId}`),
     exportCase: (id) => download(`${c(id)}/export`, `retrace-case-${id}.json`),
     exportEvidenceCsv: (id) => download(`${c(id)}/evidence.csv`, `retrace-case-${id}-evidence.csv`),
 

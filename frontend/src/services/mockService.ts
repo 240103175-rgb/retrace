@@ -90,6 +90,10 @@ export function createMockService(options: MockOptions = {}): RetraceApi & { fai
     createCase: (input) => authed((u) => svc.createCase(u, input)),
     getCase: (id) => authed((u) => svc.getCase(u, id)),
     updateCase: (id, patch) => authed((u) => svc.updateCase(u, id, patch)),
+    listMembers: (caseId) => authed((u) => svc.listMembers(u, caseId)),
+    addMember: (caseId, input) => authed((u) => svc.addMember(u, caseId, input)),
+    updateMember: (caseId, userId, input) => authed((u) => svc.updateMember(u, caseId, userId, input)),
+    removeMember: (caseId, userId) => authed((u) => svc.removeMember(u, caseId, userId)),
     exportCase: (id) =>
       authed(async (u) => ({
         filename: `retrace-case-${id}.json`,

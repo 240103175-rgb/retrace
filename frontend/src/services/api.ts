@@ -17,6 +17,8 @@ import type {
   Evidence,
   EvidenceInput,
   Graph,
+  Member,
+  MemberRole,
   Relationship,
   RelationshipInput,
   Report,
@@ -45,14 +47,19 @@ export interface RetraceApi {
   getCase(id: number): Promise<CaseSummary>;
   updateCase(
     id: number,
-    patch: { title?: string; description?: string; status?: CaseStatus; tags?: string[]; notes?: string | null },
+    patch: { title?: string; description?: string; status?: CaseStatus; tags?: string[]; notes?: string | null; version?: number },
   ): Promise<CaseSummary>;
   exportCase(id: number): Promise<Download>;
+
+  listMembers(caseId: number): Promise<Member[]>;
+  addMember(caseId: number, input: { email: string; role: MemberRole }): Promise<Member>;
+  updateMember(caseId: number, userId: number, input: { role: MemberRole }): Promise<Member>;
+  removeMember(caseId: number, userId: number): Promise<void>;
   exportEvidenceCsv(id: number): Promise<Download>;
 
   listEvidence(caseId: number, filter?: EvidenceFilter): Promise<Evidence[]>;
   createEvidence(caseId: number, input: EvidenceInput): Promise<Evidence>;
-  updateEvidence(caseId: number, id: number, patch: Partial<EvidenceInput>): Promise<Evidence>;
+  updateEvidence(caseId: number, id: number, patch: Partial<EvidenceInput> & { version?: number }): Promise<Evidence>;
   deleteEvidence(caseId: number, id: number): Promise<void>;
 
   listAttachments(caseId: number, evidenceId: number): Promise<Attachment[]>;
@@ -63,7 +70,7 @@ export interface RetraceApi {
   listEntities(caseId: number): Promise<Entity[]>;
   entitySuggestions(caseId: number): Promise<EntitySuggestion[]>;
   createEntity(caseId: number, input: EntityInput): Promise<Entity>;
-  updateEntity(caseId: number, id: number, patch: Partial<EntityInput>): Promise<Entity>;
+  updateEntity(caseId: number, id: number, patch: Partial<EntityInput> & { version?: number }): Promise<Entity>;
   deleteEntity(caseId: number, id: number): Promise<void>;
 
   listRelationships(caseId: number): Promise<Relationship[]>;

@@ -141,6 +141,10 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
   crud('entities', 'listEntities', 'createEntity', 'updateEntity', 'deleteEntity');
   crud('relationships', 'listRelationships', 'createRelationship', null, 'deleteRelationship');
 
+  api.get('/cases/:caseId/members', h(async (req, res) => res.json(await svc.listMembers(req.user, id(req.params.caseId)))));
+  api.post('/cases/:caseId/members', h(async (req, res) => res.status(201).json(await svc.addMember(req.user, id(req.params.caseId), req.body ?? {}))));
+  api.patch('/cases/:caseId/members/:userId', h(async (req, res) => res.json(await svc.updateMember(req.user, id(req.params.caseId), id(req.params.userId), req.body ?? {}))));
+  api.delete('/cases/:caseId/members/:userId', h(async (req, res) => (await svc.removeMember(req.user, id(req.params.caseId), id(req.params.userId)), res.status(204).end())));
   api.get('/cases/:caseId/summary', h(async (req, res) => res.json(await svc.summary(req.user, id(req.params.caseId)))));
   api.get('/cases/:caseId/entity-suggestions', h(async (req, res) => res.json(await svc.entitySuggestions(req.user, id(req.params.caseId)))));
   api.get('/cases/:caseId/graph', h(async (req, res) => res.json(await svc.graph(req.user, id(req.params.caseId)))));

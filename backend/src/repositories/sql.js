@@ -36,6 +36,7 @@ function defineModels(sequelize) {
       status: { type: DataTypes.ENUM('open', 'in_review', 'closed', 'archived'), allowNull: false },
       tags: { type: DataTypes.TEXT, allowNull: false, defaultValue: '[]', get() { return JSON.parse(this.getDataValue('tags') ?? '[]'); }, set(v) { this.setDataValue('tags', JSON.stringify(v ?? [])); } },
       notes: { type: DataTypes.TEXT, allowNull: true },
+      version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
       createdAt: ms(),
       updatedAt: ms(),
     },
@@ -50,6 +51,7 @@ function defineModels(sequelize) {
       observedOn: { type: DataTypes.STRING(10), allowNull: true },
       amount: { type: DataTypes.INTEGER, allowNull: true },
       verification: { type: DataTypes.ENUM('unverified', 'confirmed', 'disputed'), allowNull: false },
+      version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
       createdAt: ms(),
     },
     opts('evidence', { indexes: [{ fields: ['caseId'] }] }),
@@ -60,6 +62,7 @@ function defineModels(sequelize) {
       type: { type: DataTypes.ENUM('person', 'account', 'phone', 'link', 'card', 'wallet', 'organization'), allowNull: false },
       label: str(200),
       note: { type: DataTypes.STRING(1000), allowNull: true },
+      version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
     },
     opts('entities', { indexes: [{ fields: ['caseId'] }] }),
   );
@@ -74,6 +77,11 @@ function defineModels(sequelize) {
     'Attachment',
     { filename: str(200), mimeType: str(60), size: { type: DataTypes.INTEGER, allowNull: false }, sha256: str(64), data: { type: DataTypes.BLOB, allowNull: false }, createdAt: ms() },
     opts('attachments', { indexes: [{ fields: ['caseId'] }, { fields: ['evidenceId'] }] }),
+  );
+  const CaseMember = sequelize.define(
+    'CaseMember',
+    { role: { type: DataTypes.ENUM('editor', 'viewer'), allowNull: false }, addedAt: ms() },
+    opts('case_members', { indexes: [{ unique: true, fields: ['caseId', 'userId'] }, { fields: ['userId'] }] }),
   );
   const AuditEvent = sequelize.define(
     'AuditEvent',
@@ -92,13 +100,15 @@ function defineModels(sequelize) {
   RelationshipEvidence.belongsTo(Evidence, fk('evidenceId'));
   Relationship.hasMany(RelationshipEvidence, { as: 'support', ...fk('relationshipId') });
   Report.belongsTo(Case, fk('caseId'));
+  CaseMember.belongsTo(Case, fk('caseId'));
+  CaseMember.belongsTo(User, fk('userId'));
   Attachment.belongsTo(Case, fk('caseId'));
   Attachment.belongsTo(Evidence, fk('evidenceId'));
   Attachment.belongsTo(User, { as: 'uploader', ...fk('createdBy') });
   Report.belongsTo(User, { as: 'author', ...fk('createdBy') });
   AuditEvent.belongsTo(User, { as: 'actor', foreignKey: { name: 'actorId', allowNull: true }, onDelete: 'SET NULL' });
 
-  return { User, Session, Case, Evidence, Entity, Relationship, RelationshipEvidence, Report, Attachment, AuditEvent };
+  return { User, Session, Case, Evidence, Entity, Relationship, RelationshipEvidence, Report, Attachment, CaseMember, AuditEvent };
 }
 
 /** Columns added after v1.0 (#38): added to existing tables on start, never dropped. */
@@ -106,6 +116,9 @@ export const ADDED_COLUMNS = [
   ['users', 'disabled', { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false }],
   ['cases', 'tags', { type: DataTypes.TEXT, allowNull: false, defaultValue: '[]' }],
   ['cases', 'notes', { type: DataTypes.TEXT, allowNull: true }],
+  ['cases', 'version', { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 }],
+  ['evidence', 'version', { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 }],
+  ['entities', 'version', { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 }],
 ];
 
 export async function migrate(sequelize) {
@@ -125,7 +138,7 @@ const plain = (row) => (row ? row.get({ plain: true }) : null);
 const num = (row) => {
   if (!row) return null;
   // BIGINT columns come back as strings on some dialects; keep numbers everywhere.
-  for (const k of ['createdAt', 'updatedAt', 'expiresAt', 'at']) if (row[k] != null) row[k] = Number(row[k]);
+  for (const k of ['createdAt', 'updatedAt', 'expiresAt', 'at', 'addedAt']) if (row[k] != null) row[k] = Number(row[k]);
   return row;
 };
 const out = (row) => num(plain(row));
@@ -244,6 +257,27 @@ export async function createSqlRepository(url = process.env.DATABASE_URL || DEFA
     },
     async deleteAttachment(id) {
       await m.Attachment.destroy({ where: { id } });
+    },
+
+    // #27 sharing
+    async addMember(member) {
+      return out(await m.CaseMember.create(member));
+    },
+    async listMembers(caseId) {
+      return (await m.CaseMember.findAll({ where: { caseId }, order: [['addedAt', 'ASC'], ['id', 'ASC']] })).map(out);
+    },
+    async getMember(caseId, userId) {
+      return out(await m.CaseMember.findOne({ where: { caseId, userId } }));
+    },
+    async listMemberships(userId) {
+      return (await m.CaseMember.findAll({ where: { userId } })).map(out);
+    },
+    async updateMember(caseId, userId, p) {
+      await m.CaseMember.update(p, { where: { caseId, userId } });
+      return this.getMember(caseId, userId);
+    },
+    async removeMember(caseId, userId) {
+      await m.CaseMember.destroy({ where: { caseId, userId } });
     },
 
     async listEntities(caseId) {

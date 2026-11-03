@@ -14,6 +14,7 @@ export const VERIFICATION = ['unverified', 'confirmed', 'disputed'];
 export const ENTITY_TYPES = ['person', 'account', 'phone', 'link', 'card', 'wallet', 'organization'];
 export const RELATIONSHIP_TYPES = ['contacted', 'paid', 'owns', 'links_to', 'same_as'];
 export const ROLES = ['investigator', 'admin'];
+export const MEMBER_ROLES = ['editor', 'viewer'];
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const SORTS = ['updated', 'created', 'title', 'risk'];
 export const LOGIN_MAX_FAILURES = 5;
@@ -80,9 +81,10 @@ const evidenceDto = (e, files = []) => ({
   amount: e.amount ?? null,
   verification: e.verification,
   createdAt: iso(e.createdAt),
+  version: e.version ?? 1,
   attachments: files.filter((a) => a.evidenceId === e.id).map(attachmentDto),
 });
-const entityDto = (e) => ({ id: e.id, caseId: e.caseId, type: e.type, label: e.label, note: e.note ?? null });
+const entityDto = (e) => ({ id: e.id, caseId: e.caseId, type: e.type, label: e.label, note: e.note ?? null, version: e.version ?? 1 });
 const normLabel = (s) => String(s).trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 const TAG = /^[\p{L}\p{N} _-]{1,30}$/u;
 function tagsOf(value) {
@@ -130,18 +132,32 @@ export function createServices(repo, deps) {
   }
 
   // ---------- access ----------
-  /** Owner or admin may read; others get not_found so they cannot probe for ids. */
+  /** #27 what this user may do with the case: owner, editor, viewer, admin (read-only) or null. */
+  async function accessOf(user, c) {
+    if (c.ownerId === user.id) return 'owner';
+    const m = await repo.getMember(c.id, user.id);
+    if (m) return m.role;
+    return user.role === 'admin' ? 'admin' : null;
+  }
+  /** Owner, members and admins may read; others get not_found so they cannot probe for ids. */
   async function readableCase(user, caseId) {
     const c = await repo.getCase(Number(caseId));
-    if (!c || (c.ownerId !== user.id && user.role !== 'admin')) fail('not_found', 404);
-    return c;
+    const access = c && (await accessOf(user, c));
+    if (!access) fail('not_found', 404);
+    return { ...c, access };
   }
-  /** Only the owner may change a case; admins read other people's cases but do not edit them. */
-  async function writableCase(user, caseId, { allowLocked = false } = {}) {
+  /** Owner and editors change content; `ownerOnly` for title, status and members. Admins never edit others' cases. */
+  async function writableCase(user, caseId, { allowLocked = false, ownerOnly = false } = {}) {
     const c = await readableCase(user, caseId);
-    if (c.ownerId !== user.id) fail('forbidden', 403);
+    if (!(c.access === 'owner' || (c.access === 'editor' && !ownerOnly))) fail('forbidden', 403);
     if (!allowLocked && LOCKED_STATUSES.includes(c.status)) fail('case_locked', 409);
     return c;
+  }
+  /** #27 optimistic concurrency: a client that sends `version` must have seen the latest one. */
+  function checkVersion(body, row) {
+    if (body.version === undefined) return;
+    if (!Number.isInteger(body.version) || body.version < 1) fail('validation_error', 400, 'version must be an integer ≥ 1');
+    if (body.version !== (row.version ?? 1)) fail('edit_conflict', 409, 'changed by someone else; reload and try again');
   }
   const touch = (c) => repo.updateCase(c.id, { updatedAt: now() });
   /** #49: confirmed evidence must record where it came from. */
@@ -171,8 +187,9 @@ export function createServices(repo, deps) {
     return e;
   }
 
-  async function caseSummary(c) {
+  async function caseSummary(c, access = c.access) {
     const content = await caseContent(c.id);
+    const members = await repo.listMembers(c.id);
     const risk = assessRisk(content);
     const owner = await repo.findUserById(c.ownerId);
     return {
@@ -191,6 +208,9 @@ export function createServices(repo, deps) {
       relationshipCount: content.relationships.length,
       riskScore: risk.score,
       riskLevel: risk.level,
+      version: c.version ?? 1,
+      memberCount: members.length,
+      ...(access ? { access } : {}),
     };
   }
 
@@ -221,7 +241,7 @@ export function createServices(repo, deps) {
       .filter((c) => !status || c.status === status)
       .filter((c) => !tag || (c.tags ?? []).includes(String(tag).trim().toLocaleLowerCase()))
       .filter((c) => !query || `${c.title} ${c.description ?? ''}`.toLocaleLowerCase().includes(query));
-    return sortCases(await Promise.all(picked.map(caseSummary)), sort).slice(off, off + lim);
+    return sortCases(await Promise.all(picked.map((c) => caseSummary(c))), sort).slice(off, off + lim);
   }
 
   async function startSession(user) {
@@ -296,7 +316,13 @@ export function createServices(repo, deps) {
 
     // ---------- cases ----------
     async listCases(user, filter) {
-      return filteredCases(await repo.listCases({ ownerId: user.id }), filter);
+      const own = (await repo.listCases({ ownerId: user.id })).map((c) => ({ ...c, access: 'owner' }));
+      const shared = [];
+      for (const m of await repo.listMemberships(user.id)) {
+        const c = await repo.getCase(m.caseId);
+        if (c) shared.push({ ...c, access: m.role });
+      }
+      return filteredCases([...own, ...shared], filter);
     },
 
     async createCase(user, body = {}) {
@@ -309,7 +335,7 @@ export function createServices(repo, deps) {
         updatedAt: now(),
       });
       await audit(user, 'case.create', 'case', c.id, c.id);
-      return caseSummary(c);
+      return caseSummary(c, 'owner');
     },
 
     async getCase(user, caseId) {
@@ -317,9 +343,12 @@ export function createServices(repo, deps) {
     },
 
     async updateCase(user, caseId, body = {}) {
-      const statusOnly = Object.keys(body).every((k) => k === 'status');
-      const c = await writableCase(user, caseId, { allowLocked: statusOnly });
-      const patch = { updatedAt: now() };
+      const keys = Object.keys(body).filter((k) => k !== 'version');
+      const statusOnly = keys.every((k) => k === 'status');
+      const ownerOnly = keys.some((k) => ['title', 'description', 'status'].includes(k));
+      const c = await writableCase(user, caseId, { allowLocked: statusOnly, ownerOnly });
+      checkVersion(body, c);
+      const patch = { updatedAt: now(), version: (c.version ?? 1) + 1 };
       if (body.title !== undefined) patch.title = text(body.title, { field: 'title', min: 3, max: 120 });
       if (body.description !== undefined) patch.description = text(body.description, { field: 'description', max: 2000 });
       if (body.status !== undefined) patch.status = oneOf(body.status, CASE_STATUSES, 'status');
@@ -327,7 +356,44 @@ export function createServices(repo, deps) {
       if (body.notes !== undefined) patch.notes = text(body.notes, { field: 'notes', max: 5000, optional: true });
       const updated = await repo.updateCase(c.id, patch);
       await audit(user, body.status && body.status !== c.status ? `case.status.${body.status}` : 'case.update', 'case', c.id, c.id);
-      return caseSummary(updated);
+      return caseSummary(updated, c.access);
+    },
+
+    // ---------- members (#27) ----------
+    async listMembers(user, caseId) {
+      const c = await readableCase(user, caseId);
+      return Promise.all((await repo.listMembers(c.id)).map(memberDto));
+    },
+
+    async addMember(user, caseId, body = {}) {
+      const c = await writableCase(user, caseId, { ownerOnly: true, allowLocked: true });
+      const role = oneOf(body.role, MEMBER_ROLES, 'role');
+      const target = await repo.findUserByEmail(String(body.email ?? '').trim().toLowerCase());
+      if (!target) fail('user_not_found', 404);
+      if (target.id === c.ownerId) fail('validation_error', 400, 'the owner is already on the case');
+      if (await repo.getMember(c.id, target.id)) fail('already_member', 409);
+      const m = await repo.addMember({ caseId: c.id, userId: target.id, role, addedAt: now() });
+      await audit(user, 'case.member.add', 'user', target.id, c.id);
+      return memberDto(m);
+    },
+
+    async updateMember(user, caseId, userId, body = {}) {
+      const c = await writableCase(user, caseId, { ownerOnly: true, allowLocked: true });
+      const role = oneOf(body.role, MEMBER_ROLES, 'role');
+      if (!(await repo.getMember(c.id, Number(userId)))) fail('not_found', 404);
+      const m = await repo.updateMember(c.id, Number(userId), { role });
+      await audit(user, 'case.member.update', 'user', Number(userId), c.id);
+      return memberDto(m);
+    },
+
+    /** The owner removes anyone; a member may leave. */
+    async removeMember(user, caseId, userId) {
+      const c = await readableCase(user, caseId);
+      const self = Number(userId) === user.id;
+      if (c.access !== 'owner' && !(self && ['editor', 'viewer'].includes(c.access))) fail('forbidden', 403);
+      if (!(await repo.getMember(c.id, Number(userId)))) fail('not_found', 404);
+      await repo.removeMember(c.id, Number(userId));
+      await audit(user, self ? 'case.member.leave' : 'case.member.remove', 'user', Number(userId), c.id);
     },
 
     // ---------- evidence ----------
@@ -365,7 +431,8 @@ export function createServices(repo, deps) {
       const c = await writableCase(user, caseId);
       const e = await repo.getEvidence(Number(evidenceId));
       if (!e || e.caseId !== c.id) fail('not_found', 404);
-      const patch = {};
+      checkVersion(body, e);
+      const patch = { version: (e.version ?? 1) + 1 };
       if (body.type !== undefined) patch.type = oneOf(body.type, EVIDENCE_TYPES, 'type');
       if (body.content !== undefined) patch.content = text(body.content, { field: 'content', min: 1, max: 5000 });
       if (body.source !== undefined) patch.source = text(body.source, { field: 'source', max: 200, optional: true });
@@ -466,7 +533,8 @@ export function createServices(repo, deps) {
       const c = await writableCase(user, caseId);
       const en = await repo.getEntity(Number(entityId));
       if (!en || en.caseId !== c.id) fail('not_found', 404);
-      const patch = {};
+      checkVersion(body, en);
+      const patch = { version: (en.version ?? 1) + 1 };
       if (body.type !== undefined) patch.type = oneOf(body.type, ENTITY_TYPES, 'type');
       if (body.label !== undefined) patch.label = text(body.label, { field: 'label', min: 1, max: 200 });
       if (body.note !== undefined) patch.note = text(body.note, { field: 'note', max: 1000, optional: true });
@@ -555,7 +623,7 @@ export function createServices(repo, deps) {
       return {
         format: 'retrace-case/1',
         exportedAt: iso(now()),
-        case: await caseSummary(c),
+        case: await caseSummary(c, null),
         evidence: content.evidence.map((e) => evidenceDto(e, content.files)),
         entities: content.entities.map(entityDto),
         relationships: content.relationships.map(relationshipDto),
@@ -573,10 +641,10 @@ export function createServices(repo, deps) {
     // ---------- reports ----------
     async createReport(user, caseId) {
       const c = await readableCase(user, caseId);
-      if (c.ownerId !== user.id) fail('forbidden', 403);
+      if (!['owner', 'editor'].includes(c.access)) fail('forbidden', 403);
       const content = await caseContent(c.id);
       const snapshot = {
-        case: await caseSummary(c),
+        case: await caseSummary(c, null),
         evidence: content.evidence.map((e) => evidenceDto(e, content.files)),
         entities: content.entities.map(entityDto),
         relationships: content.relationships.map(relationshipDto),
@@ -605,7 +673,7 @@ export function createServices(repo, deps) {
     async adminStats(user) {
       requireAdmin(user);
       const [users, cases] = await Promise.all([repo.listUsers(), repo.listCases({})]);
-      const summaries = await Promise.all(cases.map(caseSummary));
+      const summaries = await Promise.all(cases.map((c) => caseSummary(c)));
       const byStatus = Object.fromEntries(CASE_STATUSES.map((s) => [s, summaries.filter((c) => c.status === s).length]));
       return {
         users: users.length,
@@ -669,6 +737,10 @@ export function createServices(repo, deps) {
     },
   };
 
+  async function memberDto(m) {
+    const u = await repo.findUserById(m.userId);
+    return { userId: m.userId, name: u?.name ?? '', email: u?.email ?? '', role: m.role, addedAt: iso(m.addedAt) };
+  }
   function reportSummary(r, author) {
     const risk = JSON.parse(r.snapshot).risk;
     return { id: r.id, caseId: r.caseId, createdAt: iso(r.createdAt), createdBy: r.createdBy, createdByName: author?.name ?? null, riskScore: risk.score, riskLevel: risk.level };

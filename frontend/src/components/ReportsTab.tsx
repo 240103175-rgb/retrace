@@ -8,7 +8,7 @@ import type { CaseTabProps } from '../pages/CasePage';
 import { useApi } from '../services/ApiContext';
 import { Empty, ErrorBox, Loading, RiskBadge } from './ui';
 
-export function ReportsTab({ caseData, owner }: CaseTabProps) {
+export function ReportsTab({ caseData, owner, canEdit = owner }: CaseTabProps) {
   const api = useApi();
   const toast = useToast();
   const list = useAsync(() => api.listReports(caseData.id), [api, caseData.id]);
@@ -31,7 +31,7 @@ export function ReportsTab({ caseData, owner }: CaseTabProps) {
     <>
       <div className="tab-head">
         <h2>{T.reports}</h2>
-        {owner && (
+        {canEdit && (
           <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void generate()}>
             {T.generateReport}
           </button>

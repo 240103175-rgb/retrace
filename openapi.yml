@@ -4,8 +4,11 @@ info:
   version: 1.2.0
   description: |
     Organise investigations of suspected online scams.
-    Access: an investigator sees only their own cases — another investigator's case answers 404 so
-    its existence is not revealed. Admins can read every case but get 403 when they try to change
+    Access: an investigator sees their own cases and cases shared with them (#27: editor or viewer) —
+    any other case answers 404 so its existence is not revealed. Editors change content, notes, tags
+    and make reports; only the owner changes title, description, status and members.
+    Concurrent edits: evidence, entities and cases carry `version`; a PATCH sent with an older
+    `version` answers 409 `edit_conflict`. Admins can read every case but get 403 when they try to change
     someone else's case. Closed or archived cases answer 409 `case_locked` to content changes.
     A risk score is an indicator, never proof.
 servers:
@@ -205,7 +208,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
     patch:
-      summary: Change title, description or status (status alone is allowed on a locked case)
+      summary: Change the case (owner — title, description, status; owner or editor — tags, notes). Status alone is allowed on a locked case
       requestBody:
         required: true
         content:
@@ -218,6 +221,7 @@ paths:
                 status: { $ref: '#/components/schemas/CaseStatus' }
                 tags: { type: array, maxItems: 10, items: { type: string, minLength: 1, maxLength: 30 } }
                 notes: { type: [string, 'null'], maxLength: 5000 }
+                version: { $ref: '#/components/schemas/Version' }
       responses:
         '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/CaseSummary' } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -351,6 +355,63 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Summary' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cases/{caseId}/members:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: People the case is shared with
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Member' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Share the case with an investigator by email (owner only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email: { type: string, maxLength: 120 }
+                role: { $ref: '#/components/schemas/MemberRole' }
+      responses:
+        '201': { description: Added, content: { application/json: { schema: { $ref: '#/components/schemas/Member' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
+  /cases/{caseId}/members/{userId}:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/UserId' }]
+    patch:
+      summary: Change a member's role (owner only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { $ref: '#/components/schemas/MemberRole' }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Member' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+    delete:
+      summary: Remove a member (owner), or leave the case (the member themself)
+      responses:
+        '204': { description: Removed }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /cases/{caseId}/entities:
@@ -560,6 +621,7 @@ components:
   parameters:
     CaseId: { name: caseId, in: path, required: true, schema: { type: integer, minimum: 1 } }
     ItemId: { name: itemId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    UserId: { name: userId, in: path, required: true, schema: { type: integer, minimum: 1 } }
     AttachmentId: { name: attachmentId, in: path, required: true, schema: { type: integer, minimum: 1 } }
     Q: { name: q, in: query, description: 'Case-insensitive search in title and description', schema: { type: string, maxLength: 100 } }
     Status: { name: status, in: query, schema: { $ref: '#/components/schemas/CaseStatus' } }
@@ -572,11 +634,11 @@ components:
     BadRequest: { description: 'validation_error, invalid_relationship, wrong_password, checksum_mismatch', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Unauthorized: { description: 'unauthorized, invalid_credentials', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Forbidden: { description: forbidden, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-    NotFound: { description: not_found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: 'not_found, user_not_found', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     TooMany: { description: too_many_attempts, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     TooLarge: { description: file_too_large, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     UnsupportedMedia: { description: 'unsupported_media_type, unsupported_file', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-    Conflict: { description: 'email_taken, case_locked, last_admin, duplicate_entity, duplicate_relationship, self_action, too_many_files', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Conflict: { description: 'email_taken, case_locked, last_admin, duplicate_entity, duplicate_relationship, self_action, too_many_files, already_member, edit_conflict', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   schemas:
     Error:
@@ -587,10 +649,24 @@ components:
           type: object
           required: [code, message]
           properties:
-            code: { type: string, enum: [validation_error, unauthorized, invalid_credentials, email_taken, forbidden, not_found, case_locked, invalid_relationship, last_admin, too_many_attempts, unsupported_media_type, duplicate_entity, duplicate_relationship, wrong_password, account_disabled, self_action, unsupported_file, file_too_large, too_many_files, checksum_mismatch, server_error] }
+            code: { type: string, enum: [validation_error, unauthorized, invalid_credentials, email_taken, forbidden, not_found, case_locked, invalid_relationship, last_admin, too_many_attempts, unsupported_media_type, duplicate_entity, duplicate_relationship, wrong_password, account_disabled, self_action, unsupported_file, file_too_large, too_many_files, checksum_mismatch, user_not_found, already_member, edit_conflict, server_error] }
             message: { type: string }
 
     Role: { type: string, enum: [investigator, admin] }
+    MemberRole: { type: string, enum: [editor, viewer] }
+    Access: { type: string, enum: [owner, editor, viewer, admin], description: 'What the signed-in user may do with this case' }
+    Version: { type: integer, minimum: 1, description: 'Increases on every change; send it back in a PATCH to detect concurrent edits' }
+
+    Member:
+      type: object
+      required: [userId, name, email, role, addedAt]
+      additionalProperties: false
+      properties:
+        userId: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        role: { $ref: '#/components/schemas/MemberRole' }
+        addedAt: { type: string, format: date-time }
     CaseStatus: { type: string, enum: [open, in_review, closed, archived] }
     EvidenceType: { type: string, enum: [message, link, account, payment, observation] }
     Verification: { type: string, enum: [unverified, confirmed, disputed] }
@@ -636,6 +712,9 @@ components:
         relationshipCount: { type: integer, minimum: 0 }
         riskScore: { type: integer, minimum: 0, maximum: 100 }
         riskLevel: { $ref: '#/components/schemas/RiskLevel' }
+        version: { $ref: '#/components/schemas/Version' }
+        access: { $ref: '#/components/schemas/Access' }
+        memberCount: { type: integer, minimum: 0 }
 
     Evidence:
       type: object
@@ -650,6 +729,7 @@ components:
         amount: { type: [integer, 'null'], minimum: 0 }
         verification: { $ref: '#/components/schemas/Verification' }
         createdAt: { type: string, format: date-time }
+        version: { $ref: '#/components/schemas/Version' }
         attachments: { type: array, items: { $ref: '#/components/schemas/Attachment' }, description: 'Files (metadata); present in lists, exports and report snapshots' }
 
     Attachment:
@@ -680,6 +760,7 @@ components:
     EvidencePatch:
       type: object
       properties:
+        version: { $ref: '#/components/schemas/Version' }
         type: { $ref: '#/components/schemas/EvidenceType' }
         content: { type: string, minLength: 1, maxLength: 5000 }
         source: { type: [string, 'null'], maxLength: 200 }
@@ -696,6 +777,7 @@ components:
         type: { $ref: '#/components/schemas/EntityType' }
         label: { type: string }
         note: { type: [string, 'null'] }
+        version: { $ref: '#/components/schemas/Version' }
 
     Summary:
       type: object
@@ -735,6 +817,7 @@ components:
     EntityPatch:
       type: object
       properties:
+        version: { $ref: '#/components/schemas/Version' }
         type: { $ref: '#/components/schemas/EntityType' }
         label: { type: string, minLength: 1, maxLength: 200 }
         note: { type: [string, 'null'], maxLength: 1000 }

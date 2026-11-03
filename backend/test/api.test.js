@@ -116,6 +116,8 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
         ['GET', `/cases/${bank}/graph`],
         ['GET', `/cases/${bank}/entity-suggestions`],
         ['GET', `/cases/${bank}/summary`],
+        ['GET', `/cases/${bank}/members`],
+        ['POST', `/cases/${bank}/members`, { email: 'aigerim@retrace.test', role: 'editor' }],
         ['GET', `/cases/${bank}/risk`],
         ['GET', `/cases/${bank}/reports`],
         ['POST', `/cases/${bank}/reports`],
@@ -190,6 +192,25 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       assert.equal((await call('PATCH', `/cases/${olx}`, { token: t, raw: JSON.stringify({ notes: 'x'.repeat(200 * 1024) }) })).status, 400); // small limit elsewhere
       assert.equal((await call('DELETE', `/cases/${olx}/evidence/${ev.id}/attachments/${up.data.id}`, { token: tokens.admin })).status, 403);
       assert.equal((await call('DELETE', `/cases/${olx}/evidence/${ev.id}/attachments/${up.data.id}`, { token: t })).status, 204);
+    });
+
+    it('#27 sharing over HTTP', async () => {
+      const t = tokens.aigerim;
+      const olx = ctx.olx.id;
+      const add = await call('POST', `/cases/${olx}/members`, { token: t, body: { email: 'daniyar@retrace.test', role: 'viewer' } });
+      assert.equal(add.status, 201);
+      const uid = add.data.userId;
+      assert.equal((await call('GET', `/cases/${olx}/members`, { token: tokens.daniyar })).data.length, 1);
+      assert.equal((await call('GET', '/cases', { token: tokens.daniyar })).data.find((c) => c.id === olx).access, 'viewer');
+      assert.equal((await call('POST', `/cases/${olx}/evidence`, { token: tokens.daniyar, body: { type: 'observation', content: 'x' } })).status, 403);
+      assert.equal((await call('PATCH', `/cases/${olx}/members/${uid}`, { token: t, body: { role: 'editor' } })).data.role, 'editor');
+      const [ev] = (await call('GET', `/cases/${olx}/evidence`, { token: t })).data;
+      assert.equal((await call('PATCH', `/cases/${olx}/evidence/${ev.id}`, { token: tokens.daniyar, body: { content: 'правка', version: ev.version } })).status, 200);
+      assert.equal((await call('PATCH', `/cases/${olx}/evidence/${ev.id}`, { token: t, body: { content: 'другая', version: ev.version } })).data.error.code, 'edit_conflict');
+      assert.equal((await call('POST', `/cases/${olx}/members`, { token: t, body: { email: 'none@retrace.test', role: 'viewer' } })).data.error.code, 'user_not_found');
+      assert.equal((await call('POST', `/cases/${olx}/members`, { token: tokens.daniyar, body: { email: 'admin@retrace.test', role: 'viewer' } })).status, 403);
+      assert.equal((await call('DELETE', `/cases/${olx}/members/${uid}`, { token: t })).status, 204);
+      assert.equal((await call('GET', `/cases/${olx}`, { token: tokens.daniyar })).status, 404);
     });
 
     it('covers every operation in the contract', () => {
