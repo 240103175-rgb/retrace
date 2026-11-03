@@ -13,7 +13,8 @@ export const T = {
   createAccount: 'Создать аккаунт',
   haveAccount: 'Уже есть аккаунт? Войти',
   noAccount: 'Нет аккаунта? Регистрация',
-  demoHint: 'Демо: aigerim@retrace.test / admin@retrace.test, пароль demo-password',
+  // The admin's password is set per deployment (ADMIN_PASSWORD), so only the investigator is shown.
+  demoHint: 'Демо: aigerim@retrace.test, пароль demo-password',
   logout: 'Выйти',
   cases: 'Дела',
   admin: 'Админ',
