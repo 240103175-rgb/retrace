@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Re:Trace",
+    "slug": "retrace",
+    "version": "1.2.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": { "bundleIdentifier": "test.retrace.mobile", "supportsTablet": true },
+    "android": { "package": "test.retrace.mobile" },
+    "plugins": ["expo-status-bar"]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@retrace/mobile",
+  "version": "1.2.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "typecheck": "tsc --noEmit",
+    "bundle": "expo export --platform ios --platform android --output-dir dist",
+    "test": "node --test --experimental-strip-types test/*.test.ts"
+  },
+  "dependencies": {
+    "@types/react": "~19.3.0",
+    "expo": "58.0.22",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "typescript": "~6.0.3"
+  }
+}

@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/data
+**/*.db
+.env
+.env.*
+!.env.example
+.git
+.github
+.claude
+mobile
+e2e
+_docs
+playwright-report
+test-results

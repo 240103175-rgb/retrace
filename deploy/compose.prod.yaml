@@ -1,0 +1,51 @@
+# Production stack for one VM (AWS #112, Google Cloud #113): the published image, PostgreSQL and Caddy for HTTPS.
+# The VM's startup script writes /opt/retrace/.env (passwords, SITE_ADDRESS) — never committed.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: retrace
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: retrace
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U retrace -d retrace']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Small VM (1 GB RAM): keep PostgreSQL modest.
+    command: ['postgres', '-c', 'shared_buffers=64MB', '-c', 'max_connections=30']
+    mem_limit: 256m
+
+  app:
+    image: ${APP_IMAGE:-ghcr.io/240103175-rgb/retrace:latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3200
+      NODE_ENV: production
+      DATABASE_URL: postgres://retrace:${POSTGRES_PASSWORD}@db:5432/retrace
+      SEED_DEMO: ${SEED_DEMO:-true}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set in .env}
+    mem_limit: 384m
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports: ['80:80', '443:443']
+    environment:
+      # A domain (e.g. 203-0-113-7.sslip.io) gets a Let's Encrypt certificate; ":80" serves plain HTTP.
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    command: ['caddy', 'reverse-proxy', '--from', '${SITE_ADDRESS:-:80}', '--to', 'app:3200']
+    volumes:
+      - caddy:/data
+    mem_limit: 64m
+
+volumes:
+  pgdata:
+  caddy:

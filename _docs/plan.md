@@ -44,12 +44,16 @@ Scanning other people's accounts, bank integrations, identity verification, AI e
 |---|---|---|
 | `credential_request` | 25 | message evidence asking for a code, password, PIN or CVV |
 | `urgent_payment` | 20 | message evidence combining urgency with payment / prepayment |
+| `remote_access` | 20 | message or observation asking to install AnyDesk / TeamViewer / RustDesk or share the screen (v1.1) |
 | `suspicious_link` | 20 | link evidence or link entity that is not HTTPS, uses an IP address, a URL shortener, punycode, or imitates a known brand domain |
 | `personal_payment` | 15 | payment evidence or a card / wallet entity that receives money |
+| `fake_prize` | 15 | message evidence combining a prize / lottery win with a tax, fee or payment (v1.1) |
 | `hub_entity` | 10 | an entity connected to 3 or more other entities |
 | `disputed_evidence` | 10 | evidence marked disputed |
 
   Level: low < 30 ≤ medium < 60 ≤ high. If no evidence is confirmed, the assessment says so ("based only on unverified evidence"). Absence of triggered rules is **not** shown as "safe".
+- Confirmed evidence must record its source (v1.1).
+- Entities are unique per case by type + label; relationships by source + target + type (v1.1).
 - A report is an immutable snapshot.
 - Passwords are stored as scrypt hashes; tokens expire after 7 days.
 - Demo data is synthetic and labelled as such.

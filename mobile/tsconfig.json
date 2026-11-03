@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noUnusedLocals": true,
+    "lib": ["ES2022", "DOM"],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["index.ts", "src", "../frontend/src/services/httpService.ts", "../frontend/src/services/api.ts", "../frontend/src/services/types.ts"]
+}

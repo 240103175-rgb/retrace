@@ -1,0 +1,288 @@
+// Types shared by the service interface, the mock and the HTTP client. Mirror /openapi.yml.
+
+export type Role = 'investigator' | 'admin';
+export type CaseStatus = 'open' | 'in_review' | 'closed' | 'archived';
+export type EvidenceType = 'message' | 'link' | 'account' | 'payment' | 'observation';
+export type Verification = 'unverified' | 'confirmed' | 'disputed';
+export type EntityType = 'person' | 'account' | 'phone' | 'link' | 'card' | 'wallet' | 'organization';
+export type RelationshipType = 'contacted' | 'paid' | 'owns' | 'links_to' | 'same_as';
+export type RiskLevel = 'low' | 'medium' | 'high';
+export type CaseSort = 'updated' | 'created' | 'title' | 'risk';
+export type RuleId =
+  | 'credential_request'
+  | 'urgent_payment'
+  | 'remote_access'
+  | 'suspicious_link'
+  | 'personal_payment'
+  | 'fake_prize'
+  | 'hub_entity'
+  | 'disputed_evidence';
+
+export type ErrorCode =
+  | 'validation_error'
+  | 'unauthorized'
+  | 'invalid_credentials'
+  | 'email_taken'
+  | 'forbidden'
+  | 'not_found'
+  | 'case_locked'
+  | 'invalid_relationship'
+  | 'last_admin'
+  | 'too_many_attempts'
+  | 'unsupported_media_type'
+  | 'duplicate_entity'
+  | 'duplicate_relationship'
+  | 'wrong_password'
+  | 'unsupported_file'
+  | 'file_too_large'
+  | 'too_many_files'
+  | 'checksum_mismatch'
+  | 'user_not_found'
+  | 'already_member'
+  | 'edit_conflict'
+  | 'account_disabled'
+  | 'self_action'
+  | 'network'
+  | 'server_error';
+
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+  role: Role;
+  disabled: boolean;
+  createdAt: string;
+}
+
+export interface Session {
+  token: string;
+  user: User;
+}
+
+export interface CaseSummary {
+  id: number;
+  title: string;
+  description: string;
+  status: CaseStatus;
+  tags: string[];
+  notes: string | null;
+  ownerId: number;
+  ownerName: string;
+  createdAt: string;
+  updatedAt: string;
+  evidenceCount: number;
+  entityCount: number;
+  relationshipCount: number;
+  riskScore: number;
+  riskLevel: RiskLevel;
+  /** #27 */
+  version?: number;
+  memberCount?: number;
+  access?: Access;
+}
+
+export type Access = 'owner' | 'editor' | 'viewer' | 'admin';
+export type MemberRole = 'editor' | 'viewer';
+export interface Member {
+  userId: number;
+  name: string;
+  email: string;
+  role: MemberRole;
+  addedAt: string;
+}
+
+export interface Evidence {
+  id: number;
+  caseId: number;
+  type: EvidenceType;
+  content: string;
+  source: string | null;
+  observedOn: string | null;
+  amount: number | null;
+  verification: Verification;
+  createdAt: string;
+  version?: number;
+  /** Files (metadata only); present in lists, exports and report snapshots (#25). */
+  attachments?: Attachment[];
+}
+
+export type FileType = 'image/png' | 'image/jpeg' | 'image/webp' | 'application/pdf' | 'text/plain';
+
+export interface Attachment {
+  id: number;
+  evidenceId: number;
+  caseId: number;
+  filename: string;
+  mimeType: string;
+  size: number;
+  sha256: string;
+  createdAt: string;
+}
+
+export interface AttachmentInput {
+  filename: string;
+  mimeType: FileType;
+  dataBase64: string;
+  sha256?: string;
+}
+
+export interface EvidenceInput {
+  type: EvidenceType;
+  content: string;
+  source?: string | null;
+  observedOn?: string | null;
+  amount?: number | null;
+  verification?: Verification;
+}
+
+export interface Entity {
+  id: number;
+  caseId: number;
+  type: EntityType;
+  label: string;
+  note: string | null;
+  version?: number;
+}
+
+export interface SummaryStatement {
+  kind: 'scope' | 'verification' | 'risk' | 'rule' | 'no_rules' | 'payments' | 'hub';
+  params: Record<string, unknown>;
+  evidenceIds: number[];
+  entityIds: number[];
+}
+
+export interface Summary {
+  generatedAt?: string;
+  statements: SummaryStatement[];
+}
+
+export interface EntitySuggestion {
+  kind: 'phone' | 'card' | 'url' | 'email' | 'handle' | 'iban' | 'wallet';
+  type: EntityType;
+  label: string;
+  evidenceIds: number[];
+}
+
+export interface EntityInput {
+  type: EntityType;
+  label: string;
+  note?: string | null;
+}
+
+export interface Relationship {
+  id: number;
+  caseId: number;
+  sourceId: number;
+  targetId: number;
+  type: RelationshipType;
+  evidenceIds: number[];
+}
+
+export interface RelationshipInput {
+  sourceId: number;
+  targetId: number;
+  type: RelationshipType;
+  evidenceIds?: number[];
+}
+
+export interface Graph {
+  nodes: { id: number; type: EntityType; label: string; degree: number }[];
+  edges: { id: number; sourceId: number; targetId: number; type: RelationshipType; evidenceCount: number }[];
+}
+
+export interface RiskRef {
+  kind: 'evidence' | 'entity';
+  id: number;
+  label: string;
+  detail?: string;
+}
+
+export interface Risk {
+  score: number;
+  level: RiskLevel;
+  basedOnlyOnUnverified: boolean;
+  rules: { id: RuleId; weight: number; refs: RiskRef[] }[];
+}
+
+export interface ReportSummary {
+  id: number;
+  caseId: number;
+  createdAt: string;
+  createdBy: number;
+  createdByName: string | null;
+  riskScore: number;
+  riskLevel: RiskLevel;
+}
+
+export interface Report extends ReportSummary {
+  /** SHA-256 of the stored snapshot (#26). */
+  fingerprint?: string;
+  snapshot: {
+    case: CaseSummary;
+    evidence: Evidence[];
+    entities: Entity[];
+    relationships: Relationship[];
+    risk: Risk;
+    /** Present in reports made from v1.2 on (#24). */
+    summary?: Summary;
+  };
+}
+
+export interface AdminStats {
+  users: number;
+  cases: number;
+  casesByStatus: Record<CaseStatus, number>;
+  evidence: number;
+  highRiskCases: number;
+  casesLast7Days: number;
+}
+
+export interface AuditEvent {
+  id: number;
+  at: string;
+  actorId: number | null;
+  actorName: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: number | null;
+  caseId: number | null;
+}
+
+export interface CaseFilter {
+  q?: string;
+  status?: CaseStatus | null;
+  sort?: CaseSort;
+  tag?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+export interface EvidenceFilter {
+  q?: string;
+  type?: EvidenceType | null;
+  verification?: Verification | null;
+}
+
+export interface AuditFilter {
+  caseId?: number;
+  limit?: number;
+  offset?: number;
+  actorId?: number | null;
+  action?: string | null;
+}
+
+export interface Download {
+  filename: string;
+  blob: Blob;
+}
+
+export class ApiError extends Error {
+  constructor(
+    public code: ErrorCode,
+    public status: number,
+    message: string = code,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}

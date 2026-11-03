@@ -1,0 +1,209 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Re:Trace on one free-tier EC2 instance (#112): Docker Compose with the app image from GHCR, PostgreSQL and
+  Caddy (HTTPS through sslip.io). No NAT gateway, load balancer or RDS. Includes a USD 1 budget alert and an
+  OIDC role so GitHub Actions can redeploy without access keys.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t2.micro]
+    Description: Free-tier eligible types only.
+  GitHubRepo:
+    Type: String
+    Default: 240103175-rgb/retrace
+    Description: owner/name — where the compose file is read from and who may deploy.
+  GitRef:
+    Type: String
+    Default: main
+  AppImage:
+    Type: String
+    Default: ghcr.io/240103175-rgb/retrace:latest
+  AdminPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+    Description: Password of admin@retrace.test on this deployment.
+  PostgresPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    AllowedPattern: '[A-Za-z0-9]+'
+    ConstraintDescription: letters and digits only (it goes into a connection URL)
+  SeedDemo:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+  BudgetEmail:
+    Type: String
+    Description: Gets an email when forecast spend passes USD 1.
+  CreateGitHubOidcProvider:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: '"false" if this account already has the token.actions.githubusercontent.com provider.'
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Conditions:
+  MakeOidcProvider: !Equals [!Ref CreateGitHubOidcProvider, 'true']
+
+Resources:
+  # --- Network: one public subnet, no NAT -------------------------------------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: [{ Key: Name, Value: retrace }]
+  Igw:
+    Type: AWS::EC2::InternetGateway
+  IgwAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: { VpcId: !Ref Vpc, InternetGatewayId: !Ref Igw }
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.42.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref Vpc }
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IgwAttachment
+    Properties: { RouteTableId: !Ref RouteTable, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref Igw }
+  SubnetRoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref Subnet, RouteTableId: !Ref RouteTable }
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTP and HTTPS only (no SSH; administration through SSM)
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+
+  # --- Instance -----------------------------------------------------------------
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{ Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: sts:AssumeRole }]
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: { Roles: [!Ref InstanceRole] }
+  Ip:
+    Type: AWS::EC2::EIP
+    Properties: { Domain: vpc }
+  Instance:
+    Type: AWS::EC2::Instance
+    DependsOn: IgwAttachment
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref InstanceProfile
+      SubnetId: !Ref Subnet
+      SecurityGroupIds: [!Ref WebSecurityGroup]
+      MetadataOptions: { HttpTokens: required }
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs: { VolumeSize: 20, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true }
+      CreditSpecification: { CPUCredits: standard } # never "unlimited": that can bill beyond the free tier
+      Tags: [{ Key: Name, Value: retrace }]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euo pipefail
+          dnf install -y docker
+          mkdir -p /usr/local/lib/docker/cli-plugins
+          curl -fsSL "https://github.com/docker/compose/releases/download/v2.39.4/docker-compose-linux-x86_64" -o /usr/local/lib/docker/cli-plugins/docker-compose
+          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+          # 1 GB RAM: add swap so image pulls and PostgreSQL fit.
+          fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
+          systemctl enable --now docker
+          mkdir -p /opt/retrace && cd /opt/retrace
+          curl -fsSL "https://raw.githubusercontent.com/${GitHubRepo}/${GitRef}/deploy/compose.prod.yaml" -o compose.yaml
+          umask 077
+          cat > .env <<ENV
+          APP_IMAGE=${AppImage}
+          POSTGRES_PASSWORD=${PostgresPassword}
+          ADMIN_PASSWORD=${AdminPassword}
+          SEED_DEMO=${SeedDemo}
+          SITE_ADDRESS=$(echo "${Ip}" | tr . -).sslip.io
+          ENV
+          docker compose pull
+          docker compose up -d
+  IpAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties: { AllocationId: !GetAtt Ip.AllocationId, InstanceId: !Ref Instance }
+
+  # --- Cost guard: free budgets, alert on USD 1 forecast ---------------------------
+  Budget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: retrace-free-tier-guard
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: { Amount: 1, Unit: USD }
+      NotificationsWithSubscribers:
+        - Notification: { NotificationType: FORECASTED, ComparisonOperator: GREATER_THAN, Threshold: 100 }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref BudgetEmail }]
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 1 }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref BudgetEmail }]
+
+  # --- GitHub Actions deploy role (OIDC, no access keys) ---------------------------
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: MakeOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+      ThumbprintList: [6938fd4d98bab03faadb97b34396831e3780aea1]
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Federated: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com' }
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubRepo}:ref:refs/heads/main'
+      Policies:
+        - PolicyName: redeploy-only
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ssm:SendCommand
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${Instance}'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript'
+              - Effect: Allow
+                Action: [ssm:GetCommandInvocation, ssm:ListCommandInvocations]
+                Resource: '*'
+
+Outputs:
+  Url:
+    Description: Open this (HTTPS certificate is issued on first request)
+    Value: !Sub
+      - 'https://${Dashed}.sslip.io'
+      - Dashed: !Join ['-', !Split ['.', !Ref Ip]]
+  InstanceId:
+    Value: !Ref Instance
+  DeployRoleArn:
+    Description: GitHub variable AWS_DEPLOY_ROLE_ARN
+    Value: !GetAtt DeployRole.Arn
