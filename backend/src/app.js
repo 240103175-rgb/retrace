@@ -12,7 +12,7 @@ import { createServices, userDto } from './domain/services.js';
  * @param {() => number} [o.now]
  * @param {string|null} [o.staticDir] built frontend (frontend/dist)
  */
-export const VERSION = '1.2.0';
+export const VERSION = '1.3.0';
 
 const CSP = [
   "default-src 'self'",

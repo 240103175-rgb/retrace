@@ -2,6 +2,29 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/). Issues refer to https://github.com/240103175-rgb/retrace/issues.
 
+## [1.3.0] — 2026-11-03
+
+### Added
+- One Dockerfile with the built frontend served by the API, non-root, with a health check (#106).
+- Docker Compose with PostgreSQL 16, health-gated start and a named volume (#108); SQLite → PostgreSQL data migration script (#107).
+- Integration tests against the composed stack, including a restart (#109); Playwright end-to-end tests, one spec per feature (#110, #115–#132).
+- Deployment: Render Blueprint and Railway config (#111), AWS CloudFormation on the free tier with a budget alert and an OIDC deploy role (#112), Google Cloud Terraform on the always-free e2-micro with Workload Identity Federation (#113).
+- CI/CD: all test jobs, then the image is published to GHCR and redeployed on every commit to `main`, with a health check (#114).
+- `SEED_DEMO` and `ADMIN_PASSWORD` for a public demo without the documented admin password.
+
+### Fixed
+- Two quick changes to the case filters no longer bring back the previous search (#133), found by the end-to-end tests.
+
+## [1.2.0] — 2026-10-21
+
+### Added
+- PostgreSQL profile tested in CI (#29), evidence files with SHA-256 checksums (#25), rule-based entity suggestions (#23),
+  draft summary with citations (#24), branded PDF with a report fingerprint (#26), collaborative investigations with
+  edit-conflict detection (#27), Expo mobile app sharing the web API client (#28).
+
+### Fixed
+- Case page hook order (#105).
+
 ## [1.1.0] — 2026-10-20
 
 ### Added
