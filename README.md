@@ -64,6 +64,7 @@ npm run db:reset -w backend        # recreate the SQLite demo database
 | `_docs/decisions.md`, `_docs/development-log.md` | Why things are as they are; how the work went |
 | `_docs/threat-model.md`, `_docs/release-checklist.md` | Security and release |
 | `_docs/deploy-postgres.md` | Running on PostgreSQL |
+| `mobile/README.md` | Expo app sharing the web API client |
 | `_docs/user-guide.md` | Руководство пользователя (RU) |
 | `CHANGELOG.md` | Versions |
 | `openapi.yml` | API contract |

@@ -70,3 +70,25 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://localhost:3200/api/v1/health && break; sleep 1; done
           npm run smoke -w backend -- http://localhost:3200 || (cat server.log; exit 1)
           grep -q 'sql:postgres' <(curl -s http://localhost:3200/api/v1/health) || (curl -s http://localhost:3200/api/v1/health; exit 1)
+
+  mobile:
+    # #28 the Expo app type-checks against the shared web API client and bundles for iOS and Android.
+    runs-on: ubuntu-latest
+    name: Mobile (Expo)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+        working-directory: mobile
+      - run: npm run typecheck
+        working-directory: mobile
+      - run: npm test
+        working-directory: mobile
+      - run: npm run bundle
+        working-directory: mobile
+        env:
+          CI: 1
