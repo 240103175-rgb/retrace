@@ -109,7 +109,9 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
     if (!checkLimit(`c:${req.ip}`)) throw new AppError('too_many_attempts', 429, 'Too many checks; wait a minute');
     res.json(await svc.publicCheck(req.query.value));
   }));
-  api.get('/health', (_req, res) => res.json({ status: 'ok', storage: repo.kind, version: VERSION }));
+  // #114 `commit` lets CI wait until the deployed instance runs the commit it just tested (Render sets RENDER_GIT_COMMIT).
+  const commit = process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || null;
+  api.get('/health', (_req, res) => res.json({ status: 'ok', storage: repo.kind, version: VERSION, commit }));
   api.use((req, _res, next) => (open.has(req.path) || req.user ? next() : next(new AppError('unauthorized', 401))));
 
   const id = (v) => Number(v);

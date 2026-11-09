@@ -26,7 +26,8 @@ RUN npm ci --omit=dev --workspace backend --no-audit --no-fund
 
 # --- 3. Runtime: dependencies + backend + static files -------------------------
 FROM node:24-bookworm-slim AS runtime
-ENV NODE_ENV=production PORT=3200
+ARG GIT_COMMIT=
+ENV NODE_ENV=production PORT=3200 GIT_COMMIT=$GIT_COMMIT
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/

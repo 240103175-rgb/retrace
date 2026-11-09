@@ -10,6 +10,8 @@ Open a **case**, record **evidence** (messages, links, accounts, payments, obser
 
 **Stack:** React + TypeScript + Vite · Node.js + Express · Sequelize ORM + SQLite · OpenAPI 3.1 · Vitest, node:test · GitHub Actions.
 
+**Live demo:** https://retrace-4nub.onrender.com — investigator `aigerim@retrace.test` / `demo-password` (synthetic data; the free instance sleeps, the first request can take a minute). Victims' pages: [/report](https://retrace-4nub.onrender.com/report), [/check](https://retrace-4nub.onrender.com/check).
+
 ## Run
 
 Requires Node.js 22.13+.
