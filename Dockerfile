@@ -12,14 +12,23 @@ COPY backend/src backend/src
 COPY frontend frontend
 RUN npm run build
 
-# --- 2. Runtime: backend production dependencies + static files -------------
+# --- 2. Backend production dependencies ---------------------------------------
+# Build tools are here, not in the final image: sqlite3 compiles from source when no prebuilt binary matches.
+FROM node:24-bookworm-slim AS deps
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/
+RUN npm ci --omit=dev --workspace backend --no-audit --no-fund
+
+# --- 3. Runtime: dependencies + backend + static files -------------------------
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production PORT=3200
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/
-COPY frontend/package.json frontend/
-RUN npm ci --omit=dev --workspace backend --no-audit --no-fund && npm cache clean --force
+COPY --from=deps /app/node_modules node_modules
 COPY backend/src backend/src
 COPY backend/scripts backend/scripts
 COPY --from=build /app/frontend/dist frontend/dist
