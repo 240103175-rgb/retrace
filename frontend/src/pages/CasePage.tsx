@@ -6,26 +6,31 @@ import { GraphTab } from '../components/GraphTab';
 import { ReportsTab } from '../components/ReportsTab';
 import { RiskTab } from '../components/RiskTab';
 import { CaseSummaryDraft } from '../components/SummaryView';
+import { SimilarCases } from '../components/CrossCase';
+import { DiscussionTab } from '../components/DiscussionTab';
+import { Timeline } from '../components/Timeline';
 import { Members } from '../components/Members';
 import { CharCounter, hasUnsavedForms, saveDownload, useDiscardGuard, useTitle } from '../components/kit';
-import { ErrorBox, Field, FormError, Loading, RiskBadge, StatusPill, VerificationPill } from '../components/ui';
+import { ErrorBox, Field, FormError, Loading, RiskBadge, StatusPill } from '../components/ui';
 import { useAuth } from '../lib/auth';
-import { date, dateTime } from '../lib/format';
-import { EVIDENCE_TYPE, STATUS, T, t } from '../lib/text';
+import { dateTime } from '../lib/format';
+import { STATUS, T, t, type TextKey } from '../lib/text';
 import { useToast } from '../lib/toast';
 import { errorKey, useAsync } from '../lib/useAsync';
 import { useApi } from '../services/ApiContext';
 import type { CaseStatus, CaseSummary } from '../services/types';
 
-const TABS = ['overview', 'evidence', 'entities', 'graph', 'risk', 'reports'] as const;
+const TABS = ['overview', 'evidence', 'entities', 'graph', 'risk', 'reports', 'discussion'] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABEL: Record<Tab, string> = {
-  overview: T.overview,
-  evidence: T.evidence,
-  entities: T.entities,
-  graph: T.graph,
-  risk: T.risk,
-  reports: T.reports,
+// Keys, not texts: the language can change while the module stays loaded (#156).
+const TAB_LABEL: Record<Tab, TextKey> = {
+  overview: 'overview',
+  evidence: 'evidence',
+  entities: 'entities',
+  graph: 'graph',
+  risk: 'risk',
+  reports: 'reports',
+  discussion: 'discussion',
 };
 
 export interface CaseTabProps {
@@ -238,9 +243,10 @@ export function CasePage() {
             className={tab === tb ? 'is-active' : ''}
             onClick={() => void guard(tb !== tab && hasUnsavedForms()).then((ok) => ok && setParams({ tab: tb }, { replace: true }))}
           >
-            {TAB_LABEL[tb]}
+            {T[TAB_LABEL[tb]]}
             {tb === 'evidence' && <span className="count">{data.evidenceCount}</span>}
             {tb === 'entities' && <span className="count">{data.entityCount}</span>}
+            {tb === 'discussion' && (data.openTasks ?? 0) > 0 && <span className="count">{data.openTasks}</span>}
           </button>
         ))}
       </nav>
@@ -252,6 +258,7 @@ export function CasePage() {
         {tab === 'graph' && <GraphTab {...props} />}
         {tab === 'risk' && <RiskTab {...props} />}
         {tab === 'reports' && <ReportsTab {...props} />}
+        {tab === 'discussion' && <DiscussionTab {...props} />}
       </section>
     </>
   );
@@ -326,6 +333,7 @@ function Overview({ caseData, editable, onChanged, openTab }: CaseTabProps) {
           <Members caseData={caseData} onChanged={onChanged} />
         </>
       )}
+      <SimilarCases caseId={caseData.id} version={caseData.updatedAt} />
       <h2>{T.summaryDraft}</h2>
       <CaseSummaryDraft caseId={caseData.id} version={caseData.updatedAt} onCite={(kind, id) => cite(openTab, kind, id)} />
       <h2>{T.notes}</h2>
@@ -347,17 +355,7 @@ function Overview({ caseData, editable, onChanged, openTab }: CaseTabProps) {
       ) : evidence.data.length === 0 ? (
         <p className="muted">{T.noEvidence}</p>
       ) : (
-        <ol className="timeline">
-          {evidence.data.map((e) => (
-            <li key={e.id}>
-              <span className="tl-date">{e.observedOn ? date(e.observedOn) : '—'}</span>
-              <div>
-                <span className="tl-type">{EVIDENCE_TYPE[e.type]}</span> <VerificationPill value={e.verification} />
-                <p>{e.content}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <Timeline evidence={evidence.data} />
       )}
     </>
   );

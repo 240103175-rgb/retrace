@@ -29,6 +29,9 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-retrace}:${POSTGRES_PASSWORD:-retrace-local}@db:5432/${POSTGRES_DB:-retrace}
       SEED_DEMO: ${SEED_DEMO:-true}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Public form limits per client address (#152 #154): reports per hour, checks per minute.
+      PUBLIC_REPORT_LIMIT: ${PUBLIC_REPORT_LIMIT:-5}
+      PUBLIC_CHECK_LIMIT: ${PUBLIC_CHECK_LIMIT:-30}
     ports:
       - '${APP_PORT:-3200}:3200'
 

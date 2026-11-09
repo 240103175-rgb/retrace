@@ -12,7 +12,7 @@
     "db:reset": "node scripts/reset-db.js",
     "db:migrate-to-postgres": "node scripts/migrate-to-postgres.js",
     "smoke": "node scripts/smoke.mjs",
-    "test:postgres": "node --test --test-concurrency=1 test/services.test.js test/features.test.js test/attachments.test.js test/extract.test.js test/summary.test.js test/report.test.js test/sharing.test.js test/migrate.test.js test/api.test.js",
+    "test:postgres": "node --test --test-concurrency=1 test/services.test.js test/features.test.js test/attachments.test.js test/extract.test.js test/summary.test.js test/report.test.js test/sharing.test.js test/risk-kz.test.js test/v14.test.js test/migrate.test.js test/api.test.js",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=test/** test/*.test.js"
   },
   "dependencies": {

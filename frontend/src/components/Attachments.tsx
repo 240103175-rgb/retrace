@@ -10,7 +10,7 @@ import { saveDownload, useConfirm } from './kit';
 export const FILE_TYPES: FileType[] = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf', 'text/plain'];
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
-export const fileSize = (n: number) => (n < 1024 ? `${n} Б` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} КБ` : `${(n / 1024 / 1024).toFixed(2)} МБ`);
+export const fileSize = (n: number) => (n < 1024 ? `${n} ${T.unitB}` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} ${T.unitKB}` : `${(n / 1024 / 1024).toFixed(2)} ${T.unitMB}`);
 
 /** Bytes → base64 without building one huge string argument. */
 export function toBase64(bytes: Uint8Array): string {

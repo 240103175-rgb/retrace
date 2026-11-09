@@ -1,9 +1,16 @@
-import { LEVEL, LINK_PROBLEM, RULE, T } from '../lib/text';
+import { LEVEL, LINK_PROBLEM, RULE, T, tf } from '../lib/text';
 import { useAsync } from '../lib/useAsync';
 import type { CaseTabProps } from '../pages/CasePage';
 import { useApi } from '../services/ApiContext';
 import type { Risk, RuleId } from '../services/types';
 import { ErrorBox, Loading } from './ui';
+
+/** Link problem, «N связей» of a hub, or «дел: N» of a cross-case match. */
+function riskDetail(detail: string) {
+  if (LINK_PROBLEM[detail]) return LINK_PROBLEM[detail];
+  if (detail.startsWith('cases:')) return tf('casesCount', { n: detail.slice(6) });
+  return tf('linksCount', { n: detail });
+}
 
 export function RiskView({ risk }: { risk: Risk }) {
   return (
@@ -35,8 +42,8 @@ export function RiskView({ risk }: { risk: Risk }) {
               <ul className="refs">
                 {r.refs.map((ref) => (
                   <li key={`${ref.kind}-${ref.id}`}>
-                    <span className="ref-kind">{ref.kind === 'evidence' ? 'доказательство' : 'сущность'}</span> {ref.label}
-                    {ref.detail && <em> — {LINK_PROBLEM[ref.detail] ?? `${ref.detail} связи`}</em>}
+                    <span className="ref-kind">{ref.kind === 'evidence' ? T.refEvidence : T.refEntity}</span> {ref.label}
+                    {ref.detail && <em> — {riskDetail(ref.detail)}</em>}
                   </li>
                 ))}
               </ul>

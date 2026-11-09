@@ -2,43 +2,39 @@ import { useEffect, useState } from 'react';
 import { useConfirm, useTitle } from '../components/kit';
 import { useAuth } from '../lib/auth';
 import { dateTime } from '../lib/format';
-import { STATUS, T, t } from '../lib/text';
+import { RULE, STATUS, T, t, tf, type TextKey } from '../lib/text';
 import { useToast } from '../lib/toast';
 import { errorKey, useAsync } from '../lib/useAsync';
 import { useApi } from '../services/ApiContext';
-import type { AuditEvent, CaseStatus, Role, User } from '../services/types';
+import type { AuditEvent, CaseStatus, Role, RuleId, User } from '../services/types';
 import { CaseFilters, CaseTable, useCaseFilters } from './CasesPage';
+import { RiskRulesAdmin } from '../components/RiskRulesAdmin';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 
-const ACTION: Record<string, string> = {
-  'user.register': 'регистрация',
-  'user.login': 'вход',
-  'case.create': 'создал дело',
-  'case.update': 'изменил дело',
-  'evidence.create': 'добавил доказательство',
-  'evidence.update': 'изменил доказательство',
-  'evidence.delete': 'удалил доказательство',
-  'entity.create': 'добавил сущность',
-  'entity.update': 'изменил сущность',
-  'entity.delete': 'удалил сущность',
-  'relationship.create': 'создал связь',
-  'relationship.delete': 'удалил связь',
-  'report.create': 'сформировал отчёт',
-};
-const ACTION_GROUPS: [string, string][] = [
-  ['case.', 'Дела'],
-  ['evidence.', 'Доказательства'],
-  ['entity.', 'Сущности'],
-  ['relationship.', 'Связи'],
-  ['report.', 'Отчёты'],
-  ['user.', 'Пользователи'],
+const ACTION_GROUPS: [string, TextKey][] = [
+  ['case.', 'cases'],
+  ['evidence.', 'evidence'],
+  ['entity.', 'entities'],
+  ['relationship.', 'relationships'],
+  ['report.', 'reports'],
+  ['user.', 'users'],
+  ['risk.rule.', 'riskRules'],
 ];
 const PAGE = 50;
 
-const actionText = (a: string) =>
-  ({ 'case.export': 'экспортировал дело', 'evidence.attachment.add': 'прикрепил файл', 'evidence.attachment.delete': 'удалил файл', 'user.update': 'изменил имя', 'user.password': 'сменил пароль', 'user.logout_all': 'вышел на всех устройствах', 'user.disabled': 'отключил пользователя', 'user.enabled': 'включил пользователя' } as Record<string, string>)[a] ??
-  ACTION[a] ??
-  (a.startsWith('case.status.') ? `статус → ${STATUS[a.slice(12) as CaseStatus] ?? a.slice(12)}` : a.startsWith('user.role.') ? `роль → ${a.slice(10)}` : a);
+/** Audit action → words in the current language; unknown actions are shown as they are. */
+export function actionText(a: string): string {
+  const key = `act_${a}` as TextKey;
+  if (key in T) return T[key];
+  if (a.startsWith('case.status.')) return tf('actStatus', { s: STATUS[a.slice(12) as CaseStatus] ?? a.slice(12) });
+  if (a.startsWith('user.role.')) return tf('actRole', { r: a.slice(10) === 'admin' ? T.administrator : T.investigator });
+  const rule = /^risk\.rule\.(\w+):(\w+)>(\w+)$/.exec(a);
+  if (rule) {
+    const state = (v: string) => (v === 'off' ? T.off : v);
+    return tf('actRule', { rule: RULE[rule[1] as RuleId]?.title ?? rule[1], from: state(rule[2]), to: state(rule[3]) });
+  }
+  return a;
+}
 
 export function AdminPage() {
   const api = useApi();
@@ -113,7 +109,7 @@ export function AdminPage() {
             </div>
             <div className="stat">
               <b>{stats.data.casesLast7Days}</b>
-              За 7 дней
+              {T.last7days}
             </div>
             <div className="stat stat-high">
               <b>{stats.data.highRiskCases}</b>
@@ -159,13 +155,13 @@ export function AdminPage() {
                   <tr key={u.id}>
                     <td>
                       {u.name}
-                      {u.id === user?.id && <span className="muted"> (вы)</span>}
+                      {u.id === user?.id && <span className="muted"> {T.you}</span>}
                     </td>
                     <td className="mono">{u.email}</td>
                     <td>
                       <select aria-label={`${T.role} ${u.email}`} value={u.role} onChange={(e) => void update(u, { role: e.target.value as Role })}>
-                        <option value="investigator">Следователь</option>
-                        <option value="admin">Администратор</option>
+                        <option value="investigator">{T.investigator}</option>
+                        <option value="admin">{T.administrator}</option>
                       </select>
                     </td>
                     <td className="nowrap">
@@ -182,6 +178,11 @@ export function AdminPage() {
             </table>
           </div>
         )}
+      </section>
+
+      <section className="panel">
+        <h2>{T.riskRules}</h2>
+        <RiskRulesAdmin onChanged={() => (stats.reload(), cases.reload(), audit.reload())} />
       </section>
 
       <section className="panel">
@@ -203,7 +204,7 @@ export function AdminPage() {
             <option value="">{T.allActions}</option>
             {ACTION_GROUPS.map(([prefix, label]) => (
               <option key={prefix} value={prefix}>
-                {label}
+                {T[label]}
               </option>
             ))}
           </select>
@@ -231,7 +232,7 @@ export function AdminPage() {
                     <td>{actionText(e.action)}</td>
                     <td className="mono small">
                       {e.resourceType} #{e.resourceId}
-                      {e.caseId != null && e.resourceType !== 'case' ? ` (дело #${e.caseId})` : ''}
+                      {e.caseId != null && e.resourceType !== 'case' ? ` ${tf('inCase', { id: e.caseId })}` : ''}
                     </td>
                   </tr>
                 ))}

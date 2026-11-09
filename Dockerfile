@@ -1,7 +1,11 @@
 # Re:Trace in one image (#106): the React build is served as static files by the Express API.
 
+# --- 0. Toolchain for native modules (sqlite3 compiles when no prebuilt binary matches) ---
+FROM node:24-bookworm-slim AS toolchain
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
+
 # --- 1. Build the frontend --------------------------------------------------
-FROM node:24-bookworm-slim AS build
+FROM toolchain AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/
@@ -12,14 +16,21 @@ COPY backend/src backend/src
 COPY frontend frontend
 RUN npm run build
 
-# --- 2. Runtime: backend production dependencies + static files -------------
+# --- 2. Backend production dependencies (build tools stay out of the final image) ---
+FROM toolchain AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/
+RUN npm ci --omit=dev --workspace backend --no-audit --no-fund
+
+# --- 3. Runtime: dependencies + backend + static files -------------------------
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production PORT=3200
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/
-COPY frontend/package.json frontend/
-RUN npm ci --omit=dev --workspace backend --no-audit --no-fund && npm cache clean --force
+COPY --from=deps /app/node_modules node_modules
 COPY backend/src backend/src
 COPY backend/scripts backend/scripts
 COPY --from=build /app/frontend/dist frontend/dist

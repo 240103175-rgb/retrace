@@ -3,7 +3,7 @@
 import { createSqlRepository } from './sql.js';
 
 /** Parents before children, so foreign keys hold during the copy. */
-const ORDER = ['User', 'Session', 'Case', 'Evidence', 'Entity', 'Relationship', 'RelationshipEvidence', 'Report', 'Attachment', 'CaseMember', 'AuditEvent'];
+const ORDER = ['User', 'Session', 'Case', 'Evidence', 'Entity', 'Relationship', 'RelationshipEvidence', 'Report', 'Attachment', 'CaseMember', 'RiskSetting', 'Comment', 'Task', 'Intake', 'AuditEvent'];
 const BATCH = 500;
 
 /**

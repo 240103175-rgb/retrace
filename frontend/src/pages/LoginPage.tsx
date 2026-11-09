@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTitle } from '../components/kit';
-import { Field, FormError, Logo } from '../components/ui';
+import { Field, FormError, Logo, PrefsBar } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { T, t } from '../lib/text';
 import { errorKey } from '../lib/useAsync';
@@ -30,7 +30,7 @@ export function LoginPage() {
     e.preventDefault();
     setError(null);
     if (mode === 'register' && password.length < 8) {
-      setError('Пароль должен быть не короче 8 символов');
+      setError(T.passwordShort);
       return;
     }
     setBusy(true);
@@ -48,7 +48,10 @@ export function LoginPage() {
   return (
     <div className="auth-page">
       <section className="auth-card">
-        <Logo />
+        <div className="row-between">
+          <Logo />
+          <PrefsBar />
+        </div>
         <p className="muted">{T.appTagline}</p>
         <h1>{mode === 'login' ? T.login : T.register}</h1>
         {expired && !error && <div className="notice">{T.sessionExpired}</div>}
@@ -79,6 +82,10 @@ export function LoginPage() {
           {mode === 'login' ? T.noAccount : T.haveAccount}
         </button>
         <p className="hint">{T.demoHint}</p>
+        <nav className="public-links" aria-label={T.forVictims}>
+          <Link to="/report">{T.reportScam}</Link>
+          <Link to="/check">{T.checkLink}</Link>
+        </nav>
       </section>
     </div>
   );

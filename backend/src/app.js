@@ -12,7 +12,7 @@ import { createServices, userDto } from './domain/services.js';
  * @param {() => number} [o.now]
  * @param {string|null} [o.staticDir] built frontend (frontend/dist)
  */
-export const VERSION = '1.3.0';
+export const VERSION = '1.4.0';
 
 const CSP = [
   "default-src 'self'",
@@ -26,10 +26,30 @@ const CSP = [
   "form-action 'self'",
 ].join('; ');
 
-export function createApp({ repo, now = Date.now, staticDir = null, log = console.log }) {
+/** #152 #154 fixed-window limit per client address, in memory (one instance); addresses are never stored elsewhere. */
+export function rateLimiter(max, windowMs, now = Date.now) {
+  const hits = new Map();
+  return (key) => {
+    const t = now();
+    const h = hits.get(key);
+    if (!h || t - h.start >= windowMs) {
+      hits.set(key, { start: t, count: 1 });
+      if (hits.size > 10_000) for (const [k, v] of hits) if (t - v.start >= windowMs) hits.delete(k);
+      return true;
+    }
+    h.count += 1;
+    return h.count <= max;
+  };
+}
+
+export function createApp({ repo, now = Date.now, staticDir = null, log = console.log, trustProxy = false, limits = {} }) {
   const svc = createServices(repo, nodeDeps(now));
   const app = express();
   app.disable('x-powered-by');
+  // Behind Render's or Caddy's proxy the client address is in X-Forwarded-For (TRUST_PROXY=1).
+  if (trustProxy) app.set('trust proxy', trustProxy);
+  const reportLimit = rateLimiter(limits.reports ?? 5, 60 * 60 * 1000, now);
+  const checkLimit = rateLimiter(limits.checks ?? 30, 60 * 1000, now);
 
   // #34 security headers on every response.
   app.use((_req, res, next) => {
@@ -56,7 +76,7 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
     next();
   });
   // #25 file uploads carry base64 (2 MB file ≈ 2.8 MB text); every other route keeps the small limit.
-  const UPLOAD = /^\/api\/v1\/cases\/[^/]+\/evidence\/[^/]+\/attachments$/;
+  const UPLOAD = /^\/api\/v1\/(cases\/[^/]+\/evidence\/[^/]+\/attachments|public\/reports)$/;
   const smallJson = express.json({ limit: '100kb' });
   const uploadJson = express.json({ limit: '3mb' });
   app.use((req, res, next) => (UPLOAD.test(req.path) ? uploadJson : smallJson)(req, res, next));
@@ -80,7 +100,15 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
       next(err);
     }
   });
-  const open = new Set(['/auth/register', '/auth/login', '/health']);
+  const open = new Set(['/auth/register', '/auth/login', '/health', '/public/reports', '/public/check']);
+  api.post('/public/reports', h(async (req, res) => {
+    if (!reportLimit(`r:${req.ip}`)) throw new AppError('too_many_attempts', 429, 'Too many reports from this address; try again later');
+    res.status(201).json(await svc.submitPublicReport(req.body ?? {}));
+  }));
+  api.get('/public/check', h(async (req, res) => {
+    if (!checkLimit(`c:${req.ip}`)) throw new AppError('too_many_attempts', 429, 'Too many checks; wait a minute');
+    res.json(await svc.publicCheck(req.query.value));
+  }));
   api.get('/health', (_req, res) => res.json({ status: 'ok', storage: repo.kind, version: VERSION }));
   api.use((req, _res, next) => (open.has(req.path) || req.user ? next() : next(new AppError('unauthorized', 401))));
 
@@ -141,6 +169,19 @@ export function createApp({ repo, now = Date.now, staticDir = null, log = consol
   crud('entities', 'listEntities', 'createEntity', 'updateEntity', 'deleteEntity');
   crud('relationships', 'listRelationships', 'createRelationship', null, 'deleteRelationship');
 
+  api.get('/cases/:caseId/matches', h(async (req, res) => res.json(await svc.matches(req.user, id(req.params.caseId)))));
+  api.get('/cases/:caseId/similar', h(async (req, res) => res.json(await svc.similar(req.user, id(req.params.caseId)))));
+  api.get('/cases/:caseId/comments', h(async (req, res) => res.json(await svc.listComments(req.user, id(req.params.caseId)))));
+  api.post('/cases/:caseId/comments', h(async (req, res) => res.status(201).json(await svc.addComment(req.user, id(req.params.caseId), req.body ?? {}))));
+  api.delete('/cases/:caseId/comments/:itemId', h(async (req, res) => (await svc.deleteComment(req.user, id(req.params.caseId), id(req.params.itemId)), res.status(204).end())));
+  api.get('/cases/:caseId/tasks', h(async (req, res) => res.json(await svc.listTasks(req.user, id(req.params.caseId)))));
+  api.post('/cases/:caseId/tasks', h(async (req, res) => res.status(201).json(await svc.addTask(req.user, id(req.params.caseId), req.body ?? {}))));
+  api.patch('/cases/:caseId/tasks/:itemId', h(async (req, res) => res.json(await svc.updateTask(req.user, id(req.params.caseId), id(req.params.itemId), req.body ?? {}))));
+  api.delete('/cases/:caseId/tasks/:itemId', h(async (req, res) => (await svc.deleteTask(req.user, id(req.params.caseId), id(req.params.itemId)), res.status(204).end())));
+  api.get('/intake', h(async (req, res) => res.json(await svc.listIntake(req.user, { status: req.query.status ?? 'new' }))));
+  api.post('/intake/:itemId/take', h(async (req, res) => res.status(201).json(await svc.takeIntake(req.user, id(req.params.itemId)))));
+  api.get('/admin/risk-rules', h(async (req, res) => res.json(await svc.adminRiskRules(req.user))));
+  api.put('/admin/risk-rules/:ruleId', h(async (req, res) => res.json(await svc.adminSetRiskRule(req.user, req.params.ruleId, req.body ?? {}))));
   api.get('/cases/:caseId/members', h(async (req, res) => res.json(await svc.listMembers(req.user, id(req.params.caseId)))));
   api.post('/cases/:caseId/members', h(async (req, res) => res.status(201).json(await svc.addMember(req.user, id(req.params.caseId), req.body ?? {}))));
   api.patch('/cases/:caseId/members/:userId', h(async (req, res) => res.json(await svc.updateMember(req.user, id(req.params.caseId), id(req.params.userId), req.body ?? {}))));

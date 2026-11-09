@@ -30,3 +30,15 @@ ADMIN_PASSWORD=… npm run e2e # when the stack was started with ADMIN_PASSWORD
 | 16-access | #130 | access control |
 | 17-notes-tags | #131 | notes, tags, unsaved changes |
 | 18-phone | #132 | phone layout |
+| 19-matches | #137 | cross-case matches |
+| 20-lookalike | #139 | look-alike domains |
+| 21-rule-settings | #141 | admin rule settings |
+| 22-kazakh-phrases | #143 | Kazakh scam phrases |
+| 23-timeline | #145 | timeline |
+| 24-similar | #149 | similar cases |
+| 25-discussion | #151 | comments and tasks |
+| 26-public-report | #153 | public report → intake → case |
+| 27-public-check | #155 | public check |
+| 28-kazakh-ui | #157 | Kazakh interface |
+| 29-theme | #159 | light/dark theme |
+| 30-offline | #161 | offline reading (service worker) |

@@ -1,39 +1,30 @@
 // #24 draft summary: renders template statements in Russian with citation chips.
-import { money, plural } from '../lib/format';
-import { ENTITY_TYPE, LEVEL, RULE, T } from '../lib/text';
+import { money } from '../lib/format';
+import { count, ENTITY_TYPE, LEVEL, RULE, T, tf } from '../lib/text';
 import { useAsync } from '../lib/useAsync';
 import { useApi } from '../services/ApiContext';
 import type { EntityType, RiskLevel, RuleId, Summary, SummaryStatement } from '../services/types';
 import { ErrorBox, Loading } from './ui';
 
 const n = (v: unknown) => Number(v ?? 0);
-const forms = {
-  evidence: ['доказательство', 'доказательства', 'доказательств'],
-  entity: ['сущность', 'сущности', 'сущностей'],
-  link: ['связь', 'связи', 'связей'],
-  rule: ['правило', 'правила', 'правил'],
-  payment: ['перевод', 'перевода', 'переводов'],
-  other: ['другой сущностью', 'другими сущностями', 'другими сущностями'],
-} as const;
-const count = (v: unknown, f: readonly [string, string, string]) => `${n(v)} ${plural(n(v), f)}`;
 
 export function statementText(s: SummaryStatement): string {
   const p = s.params as Record<string, unknown>;
   switch (s.kind) {
     case 'scope':
-      return `В деле ${count(p.evidence, forms.evidence)}, ${count(p.entities, forms.entity)} и ${count(p.relationships, forms.link)}.`;
+      return tf('sum_scope', { evidence: count(n(p.evidence), 'forms_evidence'), entities: count(n(p.entities), 'forms_entity'), links: count(n(p.relationships), 'forms_link') });
     case 'verification':
-      return `Подтверждено: ${n(p.confirmed)}, не проверено: ${n(p.unverified)}, оспорено: ${n(p.disputed)}.`;
+      return tf('sum_verification', { confirmed: n(p.confirmed), unverified: n(p.unverified), disputed: n(p.disputed) });
     case 'risk':
-      return `Индикатор риска — ${n(p.score)} из 100 (${LEVEL[p.level as RiskLevel]}): сработало ${count(p.rules, forms.rule)}.${p.onlyUnverified ? ' Основано только на непроверенных данных.' : ''}`;
+      return `${tf('sum_risk', { score: n(p.score), level: LEVEL[p.level as RiskLevel], rules: count(n(p.rules), 'forms_rule') })}${p.onlyUnverified ? ` ${T.sum_onlyUnverified}` : ''}`;
     case 'rule':
       return `${RULE[p.rule as RuleId]?.title ?? String(p.rule)} (+${n(p.weight)}).`;
     case 'no_rules':
-      return 'Ни одно правило риска не сработало.';
+      return T.sum_no_rules;
     case 'payments':
-      return `В доказательствах ${count(p.count, forms.payment)} на сумму ${money(n(p.total))}.`;
+      return tf('sum_payments', { count: count(n(p.count), 'forms_payment'), total: money(n(p.total)) });
     case 'hub':
-      return `Больше всего связей у «${String(p.label)}» (${ENTITY_TYPE[p.type as EntityType]?.toLowerCase()}): с ${count(p.links, forms.other)}.`;
+      return tf('sum_hub', { label: String(p.label), type: ENTITY_TYPE[p.type as EntityType]?.toLowerCase() ?? '', links: count(n(p.links), 'forms_other') });
     default:
       return '';
   }
@@ -55,11 +46,11 @@ export function SummaryView({ summary, onCite }: ViewProps) {
             {[...s.evidenceIds.map((id) => ['evidence', id] as const), ...s.entityIds.map((id) => ['entity', id] as const)].map(([kind, id]) =>
               onCite ? (
                 <button key={`${kind}${id}`} type="button" className="cite" aria-label={`${kind === 'evidence' ? T.citeEvidence : T.citeEntity} #${id}`} onClick={() => onCite(kind, id)}>
-                  {kind === 'evidence' ? 'Д' : 'С'}#{id}
+                  {kind === 'evidence' ? T.citeE : T.citeN}#{id}
                 </button>
               ) : (
                 <span key={`${kind}${id}`} className="cite">
-                  {kind === 'evidence' ? 'Д' : 'С'}#{id}
+                  {kind === 'evidence' ? T.citeE : T.citeN}#{id}
                 </span>
               ),
             )}

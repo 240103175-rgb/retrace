@@ -1,9 +1,36 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-import { LEVEL, STATUS, T, t, VERIFICATION } from '../lib/text';
+import { OfflineBanner } from '../lib/offline';
+import { THEMES, usePrefs } from '../lib/prefs';
+import { LEVEL, STATUS, T, t, tf, VERIFICATION } from '../lib/text';
 import { errorKey } from '../lib/useAsync';
 import type { CaseStatus, RiskLevel, Verification } from '../services/types';
+
+const THEME_ICON = { system: '◐', light: '☀', dark: '☾' } as const;
+const THEME_NAME = { system: 'themeSystem', light: 'themeLight', dark: 'themeDark' } as const;
+
+/** #156 #158 language and theme switches: header, sign-in and public pages. */
+export function PrefsBar() {
+  const { lang, setLang, theme, setTheme } = usePrefs();
+  const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+  return (
+    <div className="prefs">
+      <button type="button" className="btn btn-ghost btn-xs" lang={lang === 'ru' ? 'kk' : 'ru'} aria-label={T.langToggle} title={T.langToggle} onClick={() => setLang(lang === 'ru' ? 'kk' : 'ru')}>
+        {T.langShort}
+      </button>
+      <button
+        type="button"
+        className="btn btn-ghost btn-xs"
+        aria-label={tf('themeOf', { t: T[THEME_NAME[theme]] })}
+        title={tf('themeOf', { t: T[THEME_NAME[theme]] })}
+        onClick={() => setTheme(next)}
+      >
+        <span aria-hidden="true">{THEME_ICON[theme]}</span>
+      </button>
+    </div>
+  );
+}
 
 export function Logo() {
   return (
@@ -35,12 +62,14 @@ export function Shell({ children, mock }: { children: ReactNode; mock: boolean }
           <>
             <nav className="nav">
               <NavLink to="/cases">{T.cases}</NavLink>
+              <NavLink to="/intake">{T.intake}</NavLink>
               {user.role === 'admin' && <NavLink to="/admin">{T.admin}</NavLink>}
             </nav>
             <div className="who">
+              <PrefsBar />
               <Link to="/profile" className="who-name" title={T.profile}>
                 {user.name}
-                <small>{user.role === 'admin' ? 'Администратор' : 'Следователь'}</small>
+                <small>{user.role === 'admin' ? T.administrator : T.investigator}</small>
               </Link>
               <Link to="/profile" className="who-icon" aria-label={T.profile} title={T.profile}>
                 <span aria-hidden="true">👤</span>
@@ -52,6 +81,7 @@ export function Shell({ children, mock }: { children: ReactNode; mock: boolean }
           </>
         )}
       </header>
+      <OfflineBanner />
       <main className="main" id="main" tabIndex={-1}>
         {children}
       </main>

@@ -2,6 +2,22 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/). Issues refer to https://github.com/240103175-rgb/retrace/issues.
 
+## [1.4.0] — 2026-11-09
+
+### Added
+- Risk detection: cross-case matches with a new rule `seen_elsewhere` — other investigators' cases appear only as a count (#136);
+  look-alike and misspelled domains of Kazakh brands plus risky TLDs (#138); admin-configurable rule weights and switches,
+  audited (#140); Kazakh-language scam phrases (#142).
+- Investigator work: visual timeline with gaps and payment totals (#144), similar cases (#148), comments and tasks (#150).
+- For victims: a public report form with honeypot and rate limit that investigators take as cases (#152); a public
+  «Is this a scam?» check that counts only cases with confirmed evidence (#154).
+- Interface: complete Kazakh translation with a language switch (#156), light/dark/system theme (#158), installable app
+  that opens recently viewed cases offline (#160).
+- Playwright specs for every feature above (#137–#161).
+
+### Not done
+- Text recognition from screenshots (#146): needs the `tesseract.js` dependency, not installed yet.
+
 ## [1.3.0] — 2026-11-03
 
 ### Added

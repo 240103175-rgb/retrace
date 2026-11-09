@@ -83,6 +83,34 @@ function defineModels(sequelize) {
     { role: { type: DataTypes.ENUM('editor', 'viewer'), allowNull: false }, addedAt: ms() },
     opts('case_members', { indexes: [{ unique: true, fields: ['caseId', 'userId'] }, { fields: ['userId'] }] }),
   );
+  const RiskSetting = sequelize.define(
+    'RiskSetting',
+    { ruleId: { type: DataTypes.STRING(40), primaryKey: true }, enabled: { type: DataTypes.BOOLEAN, allowNull: false }, weight: { type: DataTypes.INTEGER, allowNull: false }, updatedAt: ms() },
+    opts('risk_settings'),
+  );
+  const Comment = sequelize.define('Comment', { text: txt(), createdAt: ms() }, opts('case_comments', { indexes: [{ fields: ['caseId'] }] }));
+  const Task = sequelize.define(
+    'Task',
+    { title: str(200), done: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false }, createdAt: ms(), updatedAt: ms() },
+    opts('case_tasks', { indexes: [{ fields: ['caseId'] }] }),
+  );
+  const Intake = sequelize.define(
+    'Intake',
+    {
+      reference: { ...str(20), unique: true },
+      description: txt(),
+      contact: str(200, true),
+      filename: str(200, true),
+      mimeType: str(60, true),
+      size: { type: DataTypes.INTEGER, allowNull: true },
+      sha256: str(64, true),
+      data: { type: DataTypes.BLOB, allowNull: true },
+      status: { type: DataTypes.ENUM('new', 'taken'), allowNull: false, defaultValue: 'new' },
+      takenAt: { type: DataTypes.BIGINT, allowNull: true },
+      createdAt: ms(),
+    },
+    opts('intake_reports', { indexes: [{ fields: ['status'] }] }),
+  );
   const AuditEvent = sequelize.define(
     'AuditEvent',
     { action: str(60), resourceType: str(30), resourceId: { type: DataTypes.INTEGER, allowNull: true }, caseId: { type: DataTypes.INTEGER, allowNull: true }, at: ms() },
@@ -100,6 +128,14 @@ function defineModels(sequelize) {
   RelationshipEvidence.belongsTo(Evidence, fk('evidenceId'));
   Relationship.hasMany(RelationshipEvidence, { as: 'support', ...fk('relationshipId') });
   Report.belongsTo(Case, fk('caseId'));
+  RiskSetting.belongsTo(User, { as: 'editor', foreignKey: { name: 'updatedBy', allowNull: true }, onDelete: 'SET NULL' });
+  Comment.belongsTo(Case, fk('caseId'));
+  Comment.belongsTo(User, { as: 'author', ...fk('authorId') });
+  Task.belongsTo(Case, fk('caseId'));
+  Task.belongsTo(User, { as: 'assignee', foreignKey: { name: 'assigneeId', allowNull: true }, onDelete: 'SET NULL' });
+  Task.belongsTo(User, { as: 'creator', ...fk('createdBy') });
+  Intake.belongsTo(User, { as: 'taker', foreignKey: { name: 'takenBy', allowNull: true }, onDelete: 'SET NULL' });
+  Intake.belongsTo(Case, { foreignKey: { name: 'caseId', allowNull: true }, onDelete: 'SET NULL' });
   CaseMember.belongsTo(Case, fk('caseId'));
   CaseMember.belongsTo(User, fk('userId'));
   Attachment.belongsTo(Case, fk('caseId'));
@@ -108,7 +144,7 @@ function defineModels(sequelize) {
   Report.belongsTo(User, { as: 'author', ...fk('createdBy') });
   AuditEvent.belongsTo(User, { as: 'actor', foreignKey: { name: 'actorId', allowNull: true }, onDelete: 'SET NULL' });
 
-  return { User, Session, Case, Evidence, Entity, Relationship, RelationshipEvidence, Report, Attachment, CaseMember, AuditEvent };
+  return { User, Session, Case, Evidence, Entity, Relationship, RelationshipEvidence, Report, Attachment, CaseMember, RiskSetting, Comment, Task, Intake, AuditEvent };
 }
 
 /** Columns added after v1.0 (#38): added to existing tables on start, never dropped. */
@@ -138,7 +174,7 @@ const plain = (row) => (row ? row.get({ plain: true }) : null);
 const num = (row) => {
   if (!row) return null;
   // BIGINT columns come back as strings on some dialects; keep numbers everywhere.
-  for (const k of ['createdAt', 'updatedAt', 'expiresAt', 'at', 'addedAt']) if (row[k] != null) row[k] = Number(row[k]);
+  for (const k of ['createdAt', 'updatedAt', 'expiresAt', 'at', 'addedAt', 'takenAt']) if (row[k] != null) row[k] = Number(row[k]);
   return row;
 };
 const out = (row) => num(plain(row));
@@ -282,6 +318,72 @@ export async function createSqlRepository(url = process.env.DATABASE_URL || DEFA
     },
     async removeMember(caseId, userId) {
       await m.CaseMember.destroy({ where: { caseId, userId } });
+    },
+
+    async listAllEntities() {
+      return (await m.Entity.findAll({ attributes: ['id', 'caseId', 'type', 'label'] })).map(out);
+    },
+
+    async getRiskSettings() {
+      return (await m.RiskSetting.findAll()).map(out);
+    },
+    async setRiskSetting(ruleId, p) {
+      const row = await m.RiskSetting.findByPk(ruleId);
+      if (row) await row.update(p);
+      else await m.RiskSetting.create({ ruleId, ...p });
+      return out(await m.RiskSetting.findByPk(ruleId));
+    },
+
+    async createComment(c) {
+      return out(await m.Comment.create(c));
+    },
+    async listComments(caseId) {
+      return (await m.Comment.findAll({ where: { caseId }, order: [['createdAt', 'ASC'], ['id', 'ASC']] })).map(out);
+    },
+    async getComment(id) {
+      return out(await m.Comment.findByPk(id));
+    },
+    async deleteComment(id) {
+      await m.Comment.destroy({ where: { id } });
+    },
+    async createTask(task) {
+      return out(await m.Task.create(task));
+    },
+    async listTasks(caseId) {
+      return (await m.Task.findAll({ where: { caseId }, order: [['id', 'ASC']] })).map(out);
+    },
+    async getTask(id) {
+      return out(await m.Task.findByPk(id));
+    },
+    async updateTask(id, p) {
+      await m.Task.update(p, { where: { id } });
+      return out(await m.Task.findByPk(id));
+    },
+    async deleteTask(id) {
+      await m.Task.destroy({ where: { id } });
+    },
+
+    async createIntake(r) {
+      const row = await m.Intake.create({ ...r, data: r.data ? Buffer.from(r.data) : null });
+      const { data, ...meta } = out(row);
+      return meta;
+    },
+    async listIntake({ status = null } = {}) {
+      const where = status == null ? {} : { status };
+      return (await m.Intake.findAll({ where, attributes: { exclude: ['data'] }, order: [['createdAt', 'DESC'], ['id', 'DESC']] })).map(out);
+    },
+    async getIntake(id) {
+      const r = out(await m.Intake.findByPk(id));
+      return r && { ...r, data: r.data ? new Uint8Array(r.data) : null };
+    },
+    async takeIntake(id, p) {
+      // Conditional update: only one investigator can take a report.
+      const [count] = await m.Intake.update({ status: 'taken', ...p }, { where: { id, status: 'new' } });
+      return count === 1;
+    },
+
+    async linkIntakeCase(id, caseId) {
+      await m.Intake.update({ caseId }, { where: { id } });
     },
 
     async listEntities(caseId) {

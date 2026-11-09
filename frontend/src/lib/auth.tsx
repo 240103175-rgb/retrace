@@ -1,3 +1,4 @@
+import { clearOfflineData } from './offline';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useApi } from '../services/ApiContext';
 import type { Session, User } from '../services/types';
@@ -69,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (session: Session) => {
       api.setToken(session.token);
       write(session.token);
+      clearOfflineData(); // #160 nothing cached for a previous user
       setExpired(false);
       setSignedOut(false);
       setUser(session.user);
@@ -82,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       api.setToken(null);
       write(null);
+      clearOfflineData();
       setSignedOut(true);
       setUser(null);
     }

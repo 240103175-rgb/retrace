@@ -2,9 +2,9 @@
 // talks only to the repository interface and to injected crypto helpers,
 // so the same code runs in the backend and in the frontend mockService.
 import { fail } from './errors.js';
-import { suggestEntities } from './extract.js';
+import { extractEntities, key as entityKey, luhn, suggestEntities } from './extract.js';
 import { MAX_FILES_PER_EVIDENCE, checkUpload } from './files.js';
-import { assessRisk } from './risk.js';
+import { RULES, assessRisk, linkProblem } from './risk.js';
 import { buildSummary } from './summary.js';
 
 export const CASE_STATUSES = ['open', 'in_review', 'closed', 'archived'];
@@ -173,13 +173,55 @@ export function createServices(repo, deps) {
   const requireAdmin = (user) => user.role === 'admin' || fail('forbidden', 403);
 
   async function caseContent(caseId) {
-    const [evidence, entities, relationships, files] = await Promise.all([
+    const [evidence, entities, relationships, files, settings, index] = await Promise.all([
       repo.listEvidence(caseId),
       repo.listEntities(caseId),
       repo.listRelationships(caseId),
       repo.listAttachments({ caseId }),
+      riskSettings(),
+      matchIndex(),
     ]);
-    return { evidence, entities, relationships, files };
+    const matches = new Map();
+    for (const en of entities) {
+      const others = otherCasesOf(en, index);
+      if (others.size) matches.set(en.id, others.size);
+    }
+    return { evidence, entities, relationships, files, settings, matches };
+  }
+  /** Risk with the admin's rule settings (#140) and cross-case matches (#136). */
+  const riskOf = (content) => assessRisk(content, content.settings);
+
+  // ---------- cross-case matching (#136, #148, #154) ----------
+  /** People and organisations are named too loosely to match across cases; identifiers are not. */
+  const MATCHABLE = new Set(['phone', 'card', 'link', 'wallet', 'account']);
+  const matchKey = (e) => `${e.type}|${entityKey(e.type, e.label)}`;
+  async function matchIndex() {
+    const index = new Map();
+    for (const e of await repo.listAllEntities()) {
+      if (!MATCHABLE.has(e.type)) continue;
+      const k = matchKey(e);
+      if (!index.has(k)) index.set(k, []);
+      index.get(k).push(e);
+    }
+    return index;
+  }
+  function otherCasesOf(en, index) {
+    if (!MATCHABLE.has(en.type)) return new Set();
+    return new Set((index.get(matchKey(en)) ?? []).filter((x) => x.caseId !== en.caseId).map((x) => x.caseId));
+  }
+  async function riskSettings() {
+    return Object.fromEntries((await repo.getRiskSettings()).map((r) => [r.ruleId, { enabled: Boolean(r.enabled), weight: r.weight }]));
+  }
+  /** Titles only for cases this user may read; everything else stays a number. */
+  function visibility(user) {
+    const seen = new Map();
+    return async (caseId) => {
+      if (!seen.has(caseId)) {
+        const c = await repo.getCase(caseId);
+        seen.set(caseId, c && (await accessOf(user, c)) ? { id: c.id, title: c.title } : null);
+      }
+      return seen.get(caseId);
+    };
   }
   async function evidenceItem(c, evidenceId) {
     const e = await repo.getEvidence(Number(evidenceId));
@@ -189,8 +231,8 @@ export function createServices(repo, deps) {
 
   async function caseSummary(c, access = c.access) {
     const content = await caseContent(c.id);
-    const members = await repo.listMembers(c.id);
-    const risk = assessRisk(content);
+    const [members, tasks] = await Promise.all([repo.listMembers(c.id), repo.listTasks(c.id)]);
+    const risk = riskOf(content);
     const owner = await repo.findUserById(c.ownerId);
     return {
       id: c.id,
@@ -210,6 +252,7 @@ export function createServices(repo, deps) {
       riskLevel: risk.level,
       version: c.version ?? 1,
       memberCount: members.length,
+      openTasks: tasks.filter((t) => !t.done).length,
       ...(access ? { access } : {}),
     };
   }
@@ -500,11 +543,105 @@ export function createServices(repo, deps) {
       return (await repo.listEntities(c.id)).map(entityDto);
     },
 
+    // ---------- cross-case (#136, #148) ----------
+    /** Each entity of the case that also appears elsewhere: readable cases by title, the rest as a count. */
+    async matches(user, caseId) {
+      const c = await readableCase(user, caseId);
+      const [entities, index] = await Promise.all([repo.listEntities(c.id), matchIndex()]);
+      const see = visibility(user);
+      const out = [];
+      for (const en of entities) {
+        const others = [...otherCasesOf(en, index)];
+        if (!others.length) continue;
+        const visibleCases = [];
+        let otherCases = 0;
+        for (const id of others) {
+          const v = await see(id);
+          if (v) visibleCases.push(v);
+          else otherCases += 1;
+        }
+        out.push({ entityId: en.id, type: en.type, label: en.label, visibleCases, otherCases });
+      }
+      return out;
+    },
+
+    /** Readable cases sharing identifiers with this one, most shared first. */
+    async similar(user, caseId) {
+      const c = await readableCase(user, caseId);
+      const [entities, index] = await Promise.all([repo.listEntities(c.id), matchIndex()]);
+      const see = visibility(user);
+      const shared = new Map();
+      for (const en of entities) {
+        for (const id of otherCasesOf(en, index)) {
+          if (!(await see(id))) continue;
+          if (!shared.has(id)) shared.set(id, []);
+          shared.get(id).push({ type: en.type, label: en.label });
+        }
+      }
+      const list = [];
+      for (const [id, items] of shared) list.push({ ...(await see(id)), shared: items, score: items.length });
+      return list.sort((a, b) => b.score - a.score || a.id - b.id);
+    },
+
+    // ---------- comments and tasks (#150) ----------
+    async listComments(user, caseId) {
+      const c = await readableCase(user, caseId);
+      return Promise.all((await repo.listComments(c.id)).map(commentDto));
+    },
+    async addComment(user, caseId, body = {}) {
+      const c = await writableCase(user, caseId);
+      const row = await repo.createComment({ caseId: c.id, authorId: user.id, text: text(body.text, { field: 'text', min: 1, max: 2000 }), createdAt: now() });
+      await audit(user, 'comment.create', 'comment', row.id, c.id);
+      return commentDto(row);
+    },
+    async deleteComment(user, caseId, commentId) {
+      const c = await writableCase(user, caseId);
+      const row = await repo.getComment(Number(commentId));
+      if (!row || row.caseId !== c.id) fail('not_found', 404);
+      if (row.authorId !== user.id) fail('forbidden', 403);
+      await repo.deleteComment(row.id);
+      await audit(user, 'comment.delete', 'comment', row.id, c.id);
+    },
+    async listTasks(user, caseId) {
+      const c = await readableCase(user, caseId);
+      return Promise.all((await repo.listTasks(c.id)).map(taskDto));
+    },
+    async addTask(user, caseId, body = {}) {
+      const c = await writableCase(user, caseId);
+      const assigneeId = await assigneeOf(c, body.assigneeId);
+      const row = await repo.createTask({ caseId: c.id, title: text(body.title, { field: 'title', min: 1, max: 200 }), assigneeId, done: false, createdBy: user.id, createdAt: now(), updatedAt: now() });
+      await audit(user, 'task.create', 'task', row.id, c.id);
+      return taskDto(row);
+    },
+    async updateTask(user, caseId, taskId, body = {}) {
+      const c = await writableCase(user, caseId);
+      const row = await repo.getTask(Number(taskId));
+      if (!row || row.caseId !== c.id) fail('not_found', 404);
+      const patch = { updatedAt: now() };
+      if (body.title !== undefined) patch.title = text(body.title, { field: 'title', min: 1, max: 200 });
+      if (body.done !== undefined) {
+        if (typeof body.done !== 'boolean') fail('validation_error', 400, 'done must be a boolean');
+        patch.done = body.done;
+      }
+      if (body.assigneeId !== undefined) patch.assigneeId = await assigneeOf(c, body.assigneeId);
+      const updated = await repo.updateTask(row.id, patch);
+      await audit(user, body.done === true ? 'task.done' : 'task.update', 'task', row.id, c.id);
+      return taskDto(updated);
+    },
+    async deleteTask(user, caseId, taskId) {
+      const c = await writableCase(user, caseId);
+      const row = await repo.getTask(Number(taskId));
+      if (!row || row.caseId !== c.id) fail('not_found', 404);
+      if (row.createdBy !== user.id && c.access !== 'owner') fail('forbidden', 403);
+      await repo.deleteTask(row.id);
+      await audit(user, 'task.delete', 'task', row.id, c.id);
+    },
+
     /** #24 draft summary: statements with citations; computed on read, never stored on its own. */
     async summary(user, caseId) {
       const c = await readableCase(user, caseId);
       const content = await caseContent(c.id);
-      return { generatedAt: iso(now()), ...buildSummary(content, assessRisk(content)) };
+      return { generatedAt: iso(now()), ...buildSummary(content, riskOf(content)) };
     },
 
     /** #23 rule-based suggestions; the investigator decides what to add. */
@@ -611,7 +748,7 @@ export function createServices(repo, deps) {
 
     async risk(user, caseId) {
       const c = await readableCase(user, caseId);
-      return assessRisk(await caseContent(c.id));
+      return riskOf(await caseContent(c.id));
     },
 
     // ---------- export ----------
@@ -627,7 +764,7 @@ export function createServices(repo, deps) {
         evidence: content.evidence.map((e) => evidenceDto(e, content.files)),
         entities: content.entities.map(entityDto),
         relationships: content.relationships.map(relationshipDto),
-        risk: assessRisk(content),
+        risk: riskOf(content),
         reports: await Promise.all(reports.map(async (r) => reportSummary(r, await repo.findUserById(r.createdBy)))),
       };
     },
@@ -648,8 +785,8 @@ export function createServices(repo, deps) {
         evidence: content.evidence.map((e) => evidenceDto(e, content.files)),
         entities: content.entities.map(entityDto),
         relationships: content.relationships.map(relationshipDto),
-        risk: assessRisk(content),
-        summary: buildSummary(content, assessRisk(content)),
+        risk: riskOf(content),
+        summary: buildSummary(content, riskOf(content)),
       };
       const r = await repo.createReport({ caseId: c.id, createdBy: user.id, createdAt: now(), snapshot: JSON.stringify(snapshot) });
       await audit(user, 'report.create', 'report', r.id, c.id);
@@ -667,6 +804,105 @@ export function createServices(repo, deps) {
       const r = await repo.getReport(Number(reportId));
       if (!r || r.caseId !== c.id) fail('not_found', 404);
       return reportDto(r, await repo.findUserById(r.createdBy));
+    },
+
+    // ---------- risk rule settings (#140) ----------
+    async adminRiskRules(user) {
+      requireAdmin(user);
+      const saved = Object.fromEntries((await repo.getRiskSettings()).map((r) => [r.ruleId, r]));
+      return RULES.map((r) => ({
+        id: r.id,
+        enabled: saved[r.id] ? Boolean(saved[r.id].enabled) : true,
+        weight: saved[r.id]?.weight ?? r.weight,
+        defaultWeight: r.weight,
+        updatedAt: saved[r.id] ? iso(saved[r.id].updatedAt) : null,
+      }));
+    },
+    async adminSetRiskRule(user, ruleId, body = {}) {
+      requireAdmin(user);
+      const rule = RULES.find((r) => r.id === ruleId) ?? fail('not_found', 404);
+      const current = (await this.adminRiskRules(user)).find((r) => r.id === rule.id);
+      const enabled = body.enabled === undefined ? current.enabled : body.enabled;
+      const weight = body.weight === undefined ? current.weight : body.weight;
+      if (typeof enabled !== 'boolean') fail('validation_error', 400, 'enabled must be a boolean');
+      if (!Number.isInteger(weight) || weight < 0 || weight > 50) fail('validation_error', 400, 'weight must be an integer 0–50');
+      await repo.setRiskSetting(rule.id, { enabled, weight, updatedAt: now(), updatedBy: user.id });
+      const state = (on, w) => (on ? String(w) : 'off');
+      await audit(user, `risk.rule.${rule.id}:${state(current.enabled, current.weight)}>${state(enabled, weight)}`, 'risk_rule', null);
+      return (await this.adminRiskRules(user)).find((r) => r.id === rule.id);
+    },
+
+    // ---------- public: victims' reports (#152) and the check (#154) ----------
+    /** No account. `website` is a honeypot: bots fill it, people never see it. */
+    async submitPublicReport(body = {}) {
+      const reference = `RT-${deps.randomToken().replace(/[^0-9a-f]/gi, '').slice(0, 8).toUpperCase()}`;
+      if (body.website) return { reference };
+      if (body.consent !== true) fail('validation_error', 400, 'consent is required');
+      const description = text(body.description, { field: 'description', min: 20, max: 5000 });
+      const contact = text(body.contact, { field: 'contact', max: 200, optional: true });
+      let file = {};
+      if (body.file) {
+        const { filename, mimeType, bytes } = checkUpload(body.file);
+        file = { filename, mimeType, size: bytes.length, sha256: await deps.sha256(bytes), data: bytes };
+      }
+      await repo.createIntake({ reference, description, contact, ...file, createdAt: now() });
+      return { reference };
+    },
+    async listIntake(user, { status = 'new' } = {}) {
+      if (status) oneOf(status, ['new', 'taken'], 'status');
+      return Promise.all((await repo.listIntake({ status: status || null })).map(intakeDto));
+    },
+    /** Turns a report into a case owned by the investigator who takes it. */
+    async takeIntake(user, intakeId) {
+      const r = await repo.getIntake(Number(intakeId));
+      if (!r) fail('not_found', 404);
+      if (!(await repo.takeIntake(r.id, { takenBy: user.id, takenAt: now() }))) fail('already_taken', 409);
+      const created = await repo.createCase({
+        ownerId: user.id,
+        title: `Обращение ${r.reference}`,
+        description: r.description.slice(0, 300),
+        status: 'open',
+        notes: r.contact ? `Контакт заявителя: ${r.contact}` : null,
+        createdAt: now(),
+        updatedAt: now(),
+      });
+      const ev = await repo.createEvidence({
+        caseId: created.id,
+        type: 'message',
+        content: r.description,
+        source: `Обращение ${r.reference} через сайт`,
+        observedOn: new Date(r.createdAt).toISOString().slice(0, 10),
+        amount: null,
+        verification: 'unverified',
+        createdAt: now(),
+      });
+      if (r.data) {
+        await repo.createAttachment({ caseId: created.id, evidenceId: ev.id, filename: r.filename, mimeType: r.mimeType, size: r.size, sha256: r.sha256, data: r.data, createdBy: user.id, createdAt: now() });
+      }
+      await repo.linkIntakeCase(r.id, created.id);
+      await audit(user, 'intake.take', 'case', created.id, created.id);
+      return caseSummary(created, 'owner');
+    },
+    /**
+     * #154 how many investigations record this phone, card, link or account. Only cases with at least one
+     * confirmed piece of evidence are counted, so unverified claims do not label a number as a scam.
+     */
+    async publicCheck(value) {
+      const raw = String(value ?? '').trim().slice(0, 300);
+      if (!raw) fail('validation_error', 400, 'value is required');
+      const found = extractEntities(raw)[0] ?? (/^\d[\d\s-]{9,}$/.test(raw) ? extractEntities(`+${raw.replace(/\D/g, '')}`)[0] : null);
+      if (!found) return { kind: 'unknown', type: null, normalised: raw, investigations: 0, signals: [] };
+      const index = await matchIndex();
+      const caseIds = new Set((index.get(matchKey(found)) ?? []).map((e) => e.caseId));
+      let investigations = 0;
+      for (const id of caseIds) if ((await repo.listEvidence(id)).some((e) => e.verification === 'confirmed')) investigations += 1;
+      const signals = [];
+      if (found.type === 'link') {
+        const problem = linkProblem(found.label);
+        if (problem) signals.push(problem);
+      }
+      if (found.kind === 'card' && !luhn(found.label)) signals.push('invalid_card');
+      return { kind: found.kind, type: found.type, normalised: found.label, investigations, signals };
     },
 
     // ---------- admin ----------
@@ -737,6 +973,46 @@ export function createServices(repo, deps) {
     },
   };
 
+  async function assigneeOf(c, assigneeId) {
+    if (assigneeId === null || assigneeId === undefined) return null;
+    const id = Number(assigneeId);
+    const ok = id === c.ownerId || (await repo.getMember(c.id, id));
+    if (!ok) fail('validation_error', 400, 'assignee must have access to the case');
+    return id;
+  }
+  async function nameOf(id) {
+    return id == null ? null : ((await repo.findUserById(id))?.name ?? null);
+  }
+  async function commentDto(r) {
+    return { id: r.id, caseId: r.caseId, authorId: r.authorId, authorName: await nameOf(r.authorId), text: r.text, createdAt: iso(r.createdAt) };
+  }
+  async function taskDto(r) {
+    return {
+      id: r.id,
+      caseId: r.caseId,
+      title: r.title,
+      done: Boolean(r.done),
+      assigneeId: r.assigneeId ?? null,
+      assigneeName: await nameOf(r.assigneeId),
+      createdBy: r.createdBy,
+      createdAt: iso(r.createdAt),
+      updatedAt: iso(r.updatedAt),
+    };
+  }
+  async function intakeDto(r) {
+    return {
+      id: r.id,
+      reference: r.reference,
+      description: r.description,
+      contact: r.contact ?? null,
+      file: r.filename ? { filename: r.filename, mimeType: r.mimeType, size: r.size, sha256: r.sha256 } : null,
+      status: r.status,
+      createdAt: iso(r.createdAt),
+      takenBy: r.takenBy ?? null,
+      takenByName: await nameOf(r.takenBy),
+      caseId: r.caseId ?? null,
+    };
+  }
   async function memberDto(m) {
     const u = await repo.findUserById(m.userId);
     return { userId: m.userId, name: u?.name ?? '', email: u?.email ?? '', role: m.role, addedAt: iso(m.addedAt) };

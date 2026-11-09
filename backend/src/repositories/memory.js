@@ -5,7 +5,7 @@ const clone = (row) => (row == null ? null : structuredClone(row));
 
 export function createMemoryRepository() {
   let nextId = 1;
-  const t = { users: [], sessions: new Map(), cases: [], evidence: [], entities: [], relationships: [], reports: [], audit: [], files: [], members: [] };
+  const t = { users: [], sessions: new Map(), cases: [], evidence: [], entities: [], relationships: [], reports: [], audit: [], files: [], members: [], riskSettings: new Map(), comments: [], tasks: [], intake: [] };
   const byId = (list, id) => list.find((x) => x.id === id);
   const insert = (list, row) => {
     const r = { id: nextId++, ...row };
@@ -127,6 +127,75 @@ export function createMemoryRepository() {
     },
     async removeMember(caseId, userId) {
       t.members = t.members.filter((x) => !(x.caseId === caseId && x.userId === userId));
+    },
+
+    /** #136 every entity, for cross-case matching (no case content). */
+    async listAllEntities() {
+      return t.entities.map(({ id, caseId, type, label }) => ({ id, caseId, type, label }));
+    },
+
+    // #140 risk rule settings
+    async getRiskSettings() {
+      return [...t.riskSettings.values()].map(clone);
+    },
+    async setRiskSetting(ruleId, p) {
+      t.riskSettings.set(ruleId, { ruleId, ...(t.riskSettings.get(ruleId) ?? {}), ...p });
+      return clone(t.riskSettings.get(ruleId));
+    },
+
+    // #150 comments and tasks
+    async createComment(c) {
+      return insert(t.comments, c);
+    },
+    async listComments(caseId) {
+      return t.comments.filter((c) => c.caseId === caseId).sort((a, b) => a.createdAt - b.createdAt || a.id - b.id).map(clone);
+    },
+    async getComment(id) {
+      return clone(byId(t.comments, id));
+    },
+    async deleteComment(id) {
+      t.comments = t.comments.filter((c) => c.id !== id);
+    },
+    async createTask(task) {
+      return insert(t.tasks, { done: false, assigneeId: null, ...task });
+    },
+    async listTasks(caseId) {
+      return t.tasks.filter((x) => x.caseId === caseId).sort((a, b) => a.id - b.id).map(clone);
+    },
+    async getTask(id) {
+      return clone(byId(t.tasks, id));
+    },
+    async updateTask(id, p) {
+      return patch(t.tasks, id, p);
+    },
+    async deleteTask(id) {
+      t.tasks = t.tasks.filter((x) => x.id !== id);
+    },
+
+    // #152 reports from the public form
+    async createIntake(r) {
+      const { data, ...meta } = insert(t.intake, { status: 'new', takenBy: null, caseId: null, takenAt: null, ...r, data: r.data ? new Uint8Array(r.data) : null });
+      return meta;
+    },
+    async listIntake({ status = null } = {}) {
+      return t.intake
+        .filter((r) => status == null || r.status === status)
+        .sort((a, b) => b.createdAt - a.createdAt || b.id - a.id)
+        .map(({ data, ...meta }) => clone(meta));
+    },
+    async getIntake(id) {
+      return clone(byId(t.intake, id));
+    },
+    /** Marks a report taken only if nobody took it first; true when this call won. */
+    async takeIntake(id, p) {
+      const r = byId(t.intake, id);
+      if (!r || r.status !== 'new') return false;
+      Object.assign(r, { status: 'taken', ...p });
+      return true;
+    },
+
+    async linkIntakeCase(id, caseId) {
+      byId(t.intake, id).caseId = caseId;
     },
 
     async listEntities(caseId) {

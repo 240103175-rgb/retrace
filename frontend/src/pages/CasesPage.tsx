@@ -3,8 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { CharCounter, useTitle } from '../components/kit';
 import { Empty, ErrorBox, Field, FormError, Loading, RiskBadge, StatusPill } from '../components/ui';
 import { useToast } from '../lib/toast';
-import { dateTime, plural } from '../lib/format';
-import { EVIDENCE_FORMS, STATUS, T, t } from '../lib/text';
+import { dateTime } from '../lib/format';
+import { count, STATUS, T, t } from '../lib/text';
 import { errorKey, useAsync } from '../lib/useAsync';
 import { useApi } from '../services/ApiContext';
 import type { CaseSort, CaseStatus, CaseSummary } from '../services/types';
@@ -18,7 +18,7 @@ export function CaseTable({ cases, showOwner = false, onTag }: { cases: CaseSumm
             <div className="case-main">
               <strong>{c.title}</strong>
               <span className="muted">
-                {c.evidenceCount} {plural(c.evidenceCount, EVIDENCE_FORMS)} · {T.updated} {dateTime(c.updatedAt)}
+                {count(c.evidenceCount, 'forms_evidence')} · {T.updated} {dateTime(c.updatedAt)}
                 {showOwner && ` · ${c.ownerName}`}
                 {(c.access === 'editor' || c.access === 'viewer') && ` · ${T.shared}: ${c.ownerName} (${c.access === 'editor' ? T.editor : T.viewer})`}
               </span>
@@ -82,7 +82,7 @@ export function CaseFilters({
           </option>
         ))}
       </select>
-      <select aria-label="Сортировка" value={sort} onChange={(e) => onChange({ sort: e.target.value as CaseSort })}>
+      <select aria-label={T.sortLabel} value={sort} onChange={(e) => onChange({ sort: e.target.value as CaseSort })}>
         <option value="updated">{T.sortUpdated}</option>
         <option value="created">{T.sortCreated}</option>
         <option value="title">{T.sortTitle}</option>
@@ -132,7 +132,7 @@ export function CasesPage() {
     e.preventDefault();
     setError(null);
     if (title.trim().length < 3) {
-      setError('Название: от 3 до 120 символов');
+      setError(T.titleLength);
       return;
     }
     setBusy(true);
