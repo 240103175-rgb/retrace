@@ -17,7 +17,8 @@ try {
 const repo = config.storage === 'memory' ? createMemoryRepository() : await createSqlRepository(config.databaseUrl);
 if (config.seedDemo && (await seed(repo, { hashPassword, adminPassword: config.adminPassword }))) console.log('Seeded synthetic demo data.');
 
-const app = createApp({ repo, staticDir: process.env.STATIC_DIR || fileURLToPath(new URL('../../frontend/dist', import.meta.url)) });
+const limits = { reports: Number(process.env.PUBLIC_REPORT_LIMIT) || undefined, checks: Number(process.env.PUBLIC_CHECK_LIMIT) || undefined };
+const app = createApp({ repo, limits, trustProxy: process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY : false, staticDir: process.env.STATIC_DIR || fileURLToPath(new URL('../../frontend/dist', import.meta.url)) });
 const server = app.listen(config.port, (err) => {
   if (err) {
     console.error(`Cannot start on port ${config.port}: ${err.message}`);

@@ -121,6 +121,9 @@ jobs:
     name: Docker Compose — integration + Playwright e2e
     env:
       ADMIN_PASSWORD: ci-admin-password-123
+      # Every e2e spec posts from the same address.
+      PUBLIC_REPORT_LIMIT: 1000
+      PUBLIC_CHECK_LIMIT: 1000
       POSTGRES_PASSWORD: ci-postgres-password
       BASE_URL: http://localhost:3200
     steps:

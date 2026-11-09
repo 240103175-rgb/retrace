@@ -154,7 +154,7 @@ export function GraphTab({ caseData }: CaseTabProps) {
                 .map((e) => (
                   <li key={e.id}>
                     {label(e.sourceId)} <i>{RELATIONSHIP[e.type]}</i> {label(e.targetId)}
-                    {e.evidenceCount > 0 && <span className="muted"> · {e.evidenceCount} док.</span>}
+                    {e.evidenceCount > 0 && <span className="muted"> · {e.evidenceCount} {T.evidenceShort}</span>}
                   </li>
                 ))}
             </ul>

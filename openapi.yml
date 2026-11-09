@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Re:Trace API
-  version: 1.3.0
+  version: 1.4.0
   description: |
     Organise investigations of suspected online scams.
     Access: an investigator sees their own cases and cases shared with them (#27: editor or viewer) —
@@ -357,6 +357,224 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /public/reports:
+    post:
+      summary: A victim reports a scam without an account (#152). Rate limited per address; `website` is a honeypot.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description, consent]
+              properties:
+                description: { type: string, minLength: 20, maxLength: 5000 }
+                contact: { type: [string, 'null'], maxLength: 200 }
+                consent: { type: boolean, const: true }
+                website: { type: string, description: Leave empty }
+                file:
+                  type: object
+                  required: [filename, mimeType, dataBase64]
+                  properties:
+                    filename: { type: string, maxLength: 200 }
+                    mimeType: { type: string, enum: [image/png, image/jpeg, image/webp, application/pdf, text/plain] }
+                    dataBase64: { type: string }
+      responses:
+        '201': { description: Received, content: { application/json: { schema: { type: object, required: [reference], properties: { reference: { type: string } } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+        '429': { $ref: '#/components/responses/TooMany' }
+
+  /public/check:
+    get:
+      summary: Is this phone, card, link or account in investigations? Counts only, never case details (#154)
+      security: []
+      parameters: [{ name: value, in: query, required: true, schema: { type: string, maxLength: 300 } }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [kind, type, normalised, investigations, signals]
+                properties:
+                  kind: { type: string, enum: [phone, card, url, email, handle, iban, wallet, unknown] }
+                  type: { type: [string, 'null'] }
+                  normalised: { type: string }
+                  investigations: { type: integer, minimum: 0, description: Cases with at least one confirmed piece of evidence that record this value }
+                  signals: { type: array, items: { type: string } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooMany' }
+
+  /intake:
+    get:
+      summary: Reports from the public form (#152)
+      parameters: [{ name: status, in: query, schema: { type: string, enum: [new, taken], default: new } }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/IntakeReport' } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /intake/{itemId}/take:
+    parameters: [{ $ref: '#/components/parameters/ItemId' }]
+    post:
+      summary: Take a report; it becomes a case owned by the caller
+      responses:
+        '201': { description: Case created, content: { application/json: { schema: { $ref: '#/components/schemas/CaseSummary' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /admin/risk-rules:
+    get:
+      summary: Risk rules with their current weight and switch (#140)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RiskRuleSetting' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/risk-rules/{ruleId}:
+    parameters: [{ name: ruleId, in: path, required: true, schema: { type: string } }]
+    put:
+      summary: Change a rule's weight or switch it off; audited
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+                weight: { type: integer, minimum: 0, maximum: 50 }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/RiskRuleSetting' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
+  /cases/{caseId}/matches:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Entities of this case recorded in other investigations (#136) — titles only for readable cases
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [entityId, type, label, visibleCases, otherCases]
+                  properties:
+                    entityId: { type: integer }
+                    type: { $ref: '#/components/schemas/EntityType' }
+                    label: { type: string }
+                    visibleCases: { type: array, items: { $ref: '#/components/schemas/CaseRef' } }
+                    otherCases: { type: integer, minimum: 0, description: Cases the caller cannot read (count only) }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cases/{caseId}/similar:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Readable cases sharing identifiers with this one (#148)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/CaseRef'
+                    - type: object
+                      required: [shared, score]
+                      properties:
+                        score: { type: integer }
+                        shared: { type: array, items: { type: object, required: [type, label], properties: { type: { $ref: '#/components/schemas/EntityType' }, label: { type: string } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cases/{caseId}/comments:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Discussion of the case (#150)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Comment' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Add a comment (owner or editor)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [text], properties: { text: { type: string, minLength: 1, maxLength: 2000 } } } } } }
+      responses:
+        '201': { description: Added, content: { application/json: { schema: { $ref: '#/components/schemas/Comment' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
+  /cases/{caseId}/comments/{itemId}:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }]
+    delete:
+      summary: Delete own comment
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /cases/{caseId}/tasks:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      summary: Checks to do on the case (#150)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Task' } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Add a task (owner or editor); the assignee must have access to the case
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [title], properties: { title: { type: string, minLength: 1, maxLength: 200 }, assigneeId: { type: [integer, 'null'] } } } } } }
+      responses:
+        '201': { description: Added, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+
+  /cases/{caseId}/tasks/{itemId}:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/ItemId' }]
+    patch:
+      summary: Change, assign or complete a task
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { title: { type: string, minLength: 1, maxLength: 200 }, done: { type: boolean }, assigneeId: { type: [integer, 'null'] } } } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+    delete:
+      summary: Delete a task (its creator or the owner)
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /cases/{caseId}/members:
     parameters: [{ $ref: '#/components/parameters/CaseId' }]
     get:
@@ -638,7 +856,7 @@ components:
     TooMany: { description: too_many_attempts, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     TooLarge: { description: file_too_large, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     UnsupportedMedia: { description: 'unsupported_media_type, unsupported_file', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-    Conflict: { description: 'email_taken, case_locked, last_admin, duplicate_entity, duplicate_relationship, self_action, too_many_files, already_member, edit_conflict', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Conflict: { description: 'email_taken, case_locked, last_admin, duplicate_entity, duplicate_relationship, self_action, too_many_files, already_member, edit_conflict, already_taken', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   schemas:
     Error:
@@ -649,13 +867,76 @@ components:
           type: object
           required: [code, message]
           properties:
-            code: { type: string, enum: [validation_error, unauthorized, invalid_credentials, email_taken, forbidden, not_found, case_locked, invalid_relationship, last_admin, too_many_attempts, unsupported_media_type, duplicate_entity, duplicate_relationship, wrong_password, account_disabled, self_action, unsupported_file, file_too_large, too_many_files, checksum_mismatch, user_not_found, already_member, edit_conflict, server_error] }
+            code: { type: string, enum: [validation_error, unauthorized, invalid_credentials, email_taken, forbidden, not_found, case_locked, invalid_relationship, last_admin, too_many_attempts, unsupported_media_type, duplicate_entity, duplicate_relationship, wrong_password, account_disabled, self_action, unsupported_file, file_too_large, too_many_files, checksum_mismatch, user_not_found, already_member, edit_conflict, already_taken, server_error] }
             message: { type: string }
 
     Role: { type: string, enum: [investigator, admin] }
     MemberRole: { type: string, enum: [editor, viewer] }
     Access: { type: string, enum: [owner, editor, viewer, admin], description: 'What the signed-in user may do with this case' }
     Version: { type: integer, minimum: 1, description: 'Increases on every change; send it back in a PATCH to detect concurrent edits' }
+
+    CaseRef:
+      type: object
+      required: [id, title]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+
+    Comment:
+      type: object
+      required: [id, caseId, authorId, authorName, text, createdAt]
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        authorId: { type: integer }
+        authorName: { type: [string, 'null'] }
+        text: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Task:
+      type: object
+      required: [id, caseId, title, done, assigneeId, assigneeName, createdBy, createdAt, updatedAt]
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        title: { type: string }
+        done: { type: boolean }
+        assigneeId: { type: [integer, 'null'] }
+        assigneeName: { type: [string, 'null'] }
+        createdBy: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    IntakeReport:
+      type: object
+      required: [id, reference, description, contact, file, status, createdAt, takenBy, takenByName, caseId]
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        reference: { type: string }
+        description: { type: string }
+        contact: { type: [string, 'null'] }
+        file:
+          type: [object, 'null']
+          properties: { filename: { type: string }, mimeType: { type: string }, size: { type: integer }, sha256: { type: string } }
+        status: { type: string, enum: [new, taken] }
+        createdAt: { type: string, format: date-time }
+        takenBy: { type: [integer, 'null'] }
+        takenByName: { type: [string, 'null'] }
+        caseId: { type: [integer, 'null'] }
+
+    RiskRuleSetting:
+      type: object
+      required: [id, enabled, weight, defaultWeight, updatedAt]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        enabled: { type: boolean }
+        weight: { type: integer, minimum: 0, maximum: 50 }
+        defaultWeight: { type: integer }
+        updatedAt: { type: [string, 'null'], format: date-time }
 
     Member:
       type: object
@@ -715,6 +996,7 @@ components:
         version: { $ref: '#/components/schemas/Version' }
         access: { $ref: '#/components/schemas/Access' }
         memberCount: { type: integer, minimum: 0 }
+        openTasks: { type: integer, minimum: 0 }
 
     Evidence:
       type: object
@@ -872,7 +1154,7 @@ components:
             type: object
             required: [id, weight, refs]
             properties:
-              id: { type: string, enum: [credential_request, urgent_payment, remote_access, suspicious_link, personal_payment, fake_prize, hub_entity, disputed_evidence] }
+              id: { type: string, enum: [credential_request, urgent_payment, remote_access, suspicious_link, personal_payment, fake_prize, seen_elsewhere, hub_entity, disputed_evidence] }
               weight: { type: integer }
               refs:
                 type: array

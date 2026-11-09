@@ -15,6 +15,7 @@ export type RuleId =
   | 'suspicious_link'
   | 'personal_payment'
   | 'fake_prize'
+  | 'seen_elsewhere'
   | 'hub_entity'
   | 'disputed_evidence';
 
@@ -40,6 +41,7 @@ export type ErrorCode =
   | 'user_not_found'
   | 'already_member'
   | 'edit_conflict'
+  | 'already_taken'
   | 'account_disabled'
   | 'self_action'
   | 'network'
@@ -78,6 +80,7 @@ export interface CaseSummary {
   /** #27 */
   version?: number;
   memberCount?: number;
+  openTasks?: number;
   access?: Access;
 }
 
@@ -142,6 +145,74 @@ export interface Entity {
   label: string;
   note: string | null;
   version?: number;
+}
+
+export interface CaseRef {
+  id: number;
+  title: string;
+}
+export interface EntityMatch {
+  entityId: number;
+  type: EntityType;
+  label: string;
+  visibleCases: CaseRef[];
+  otherCases: number;
+}
+export interface SimilarCase extends CaseRef {
+  score: number;
+  shared: { type: EntityType; label: string }[];
+}
+export interface Comment {
+  id: number;
+  caseId: number;
+  authorId: number;
+  authorName: string | null;
+  text: string;
+  createdAt: string;
+}
+export interface Task {
+  id: number;
+  caseId: number;
+  title: string;
+  done: boolean;
+  assigneeId: number | null;
+  assigneeName: string | null;
+  createdBy: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface IntakeReport {
+  id: number;
+  reference: string;
+  description: string;
+  contact: string | null;
+  file: { filename: string; mimeType: string; size: number; sha256: string } | null;
+  status: 'new' | 'taken';
+  createdAt: string;
+  takenBy: number | null;
+  takenByName: string | null;
+  caseId: number | null;
+}
+export interface RiskRuleSetting {
+  id: RuleId;
+  enabled: boolean;
+  weight: number;
+  defaultWeight: number;
+  updatedAt: string | null;
+}
+export interface PublicCheck {
+  kind: 'phone' | 'card' | 'url' | 'email' | 'handle' | 'iban' | 'wallet' | 'unknown';
+  type: EntityType | null;
+  normalised: string;
+  investigations: number;
+  signals: string[];
+}
+export interface PublicReportInput {
+  description: string;
+  contact?: string | null;
+  consent: boolean;
+  website?: string;
+  file?: AttachmentInput;
 }
 
 export interface SummaryStatement {

@@ -24,6 +24,17 @@ Investigator (legitimate, sees own cases), admin, another investigator (curious)
 | Denial of service | Huge bodies | 100 KB JSON limit; non-JSON bodies 415 | `app.js` (#41) |
 | Elevation of privilege | Investigator calling admin endpoints | `requireAdmin` in services; last active admin cannot be demoted/disabled | `services.admin*` |
 
+## Public endpoints (v1.4)
+
+| Threat | Control |
+|---|---|
+| Spam or flooding through the public report form | 5 reports per hour per client address (in memory), honeypot field, 2 MB file limit, consent required |
+| Using the public check to label someone a scammer | Only a count; only cases with at least one **confirmed** piece of evidence; wording «подсказка, а не доказательство»; 30 checks per minute per address |
+| Learning other investigators' cases through matches | Titles only for cases the user may read; everything else is a number |
+| Data of one user shown to the next on a shared device (offline cache) | API cache cleared on every sign-in and sign-out; writes never cached; auth, public, file and export responses never cached |
+
+Behind a proxy (Render, Caddy) set `TRUST_PROXY=1` so limits use the real client address. Counters reset on restart.
+
 ## Known gaps (accepted for the MVP)
 
 - Sharing by email answers `user_not_found` for unknown emails, so a signed-in investigator can learn which emails have accounts. Accepted: only signed-in users, and only on their own cases.

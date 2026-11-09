@@ -5,6 +5,7 @@ import { errorKey, useAsync } from '../lib/useAsync';
 import type { CaseTabProps } from '../pages/CasePage';
 import { useApi } from '../services/ApiContext';
 import type { Entity, EntityType, RelationshipType } from '../services/types';
+import { Matches } from './CrossCase';
 import { EntitySuggestions } from './EntitySuggestions';
 import { CharCounter, useConfirm, useDiscardGuard, useUnsavedWarning } from './kit';
 import { Empty, ErrorBox, Field, FormError, Loading } from './ui';
@@ -51,7 +52,7 @@ export function EntitiesTab({ caseData, editable, onChanged }: CaseTabProps) {
     e.preventDefault();
     if (!entityForm) return;
     if (!entityForm.label.trim()) {
-      setError('Обозначение: от 1 до 200 символов');
+      setError(T.labelLength);
       return;
     }
     try {
@@ -110,6 +111,7 @@ export function EntitiesTab({ caseData, editable, onChanged }: CaseTabProps) {
           </button>
         )}
       </div>
+      <Matches caseId={caseData.id} version={`${data.data?.entities.length ?? 0}-${caseData.updatedAt}`} />
       {editable && <EntitySuggestions caseId={caseData.id} version={`${data.data?.entities.length ?? 0}-${caseData.updatedAt}`} onAdded={() => after(T.ok_created)} />}
       {entityForm && (
         <form className="form subpanel" onSubmit={addEntity} noValidate>

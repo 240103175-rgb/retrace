@@ -3,12 +3,15 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { ConfirmProvider, ErrorBoundary } from './components/kit';
 import { Loading, Shell } from './components/ui';
 import { AuthProvider, useAuth } from './lib/auth';
+import { PrefsProvider } from './lib/prefs';
 import { T } from './lib/text';
 import { ToastProvider } from './lib/toast';
 import { AdminPage } from './pages/AdminPage';
 import { CasePage } from './pages/CasePage';
 import { CasesPage } from './pages/CasesPage';
+import { IntakePage } from './pages/IntakePage';
 import { LoginPage } from './pages/LoginPage';
+import { CheckPage, ReportScamPage } from './pages/PublicPages';
 import { ProfilePage } from './pages/ProfilePage';
 import { ReportPage } from './pages/ReportPage';
 import type { RetraceApi } from './services/api';
@@ -33,6 +36,8 @@ export function AppRoutes({ mock }: { mock: boolean }) {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/report" element={<ReportScamPage />} />
+      <Route path="/check" element={<CheckPage />} />
       <Route
         path="*"
         element={
@@ -44,6 +49,7 @@ export function AppRoutes({ mock }: { mock: boolean }) {
               <Route path="/cases/:id/reports/:reportId" element={<RequireUser><ReportPage /></RequireUser>} />
               <Route path="/admin" element={<RequireUser admin><AdminPage /></RequireUser>} />
               <Route path="/profile" element={<RequireUser><ProfilePage /></RequireUser>} />
+              <Route path="/intake" element={<RequireUser><IntakePage /></RequireUser>} />
               <Route path="*" element={<section className="panel center"><h1>{T.notFound}</h1></section>} />
             </Routes>
           </Shell>
@@ -60,7 +66,9 @@ export function App({ api, mock, router = true }: { api: RetraceApi; mock: boole
         <ConfirmProvider>
           <AuthProvider>
             <ErrorBoundary>
-              <AppRoutes mock={mock} />
+              <PrefsProvider>
+                <AppRoutes mock={mock} />
+              </PrefsProvider>
             </ErrorBoundary>
           </AuthProvider>
         </ConfirmProvider>

@@ -63,3 +63,17 @@ Each entry: context → decision → alternatives considered → consequences.
 - **Context:** #23/#24 were parked as "AI" features; the brainstorm warned about wrong conclusions.
 - **Decision (user, 2026-10-21):** deterministic rules — regexes with Luhn for entities, templates over case data for the summary, every statement citing its evidence.
 - **Consequences:** no API key, reproducible tests, quality measured on a labelled corpus; names of people and organisations are not suggested.
+
+## 2026-11-09 — Translations as swappable dictionaries, no i18n library
+- **Context:** #156 needs a full Kazakh interface; adding a dependency needs approval and the app already had one dictionary.
+- **Decision:** `text.ts` holds Russian and Kazakh dictionaries with identical keys; `setLanguage` swaps them in place and the app re-renders under a new React key. A test fails when a key or placeholder is missing in one language, or when a component contains literal Cyrillic.
+- **Consequences:** switching language remounts the screens (unsaved form input is lost — the switch is rare). Numbers and dates keep the Kazakhstan convention (15 000 ₸, 06.11.2026) in both languages.
+
+## 2026-11-09 — Hand-written service worker
+- **Context:** #160 offline reading; Workbox would be a new dependency.
+- **Decision:** `public/sw.js` (~80 lines): network-first for pages and API reads, cache-first for hashed assets, nothing for writes; the API cache is cleared when the user changes.
+- **Consequences:** offline data can be stale (banner says so); only cases opened while online are available.
+
+## 2026-11-09 — Cross-case matching by identifiers only
+- **Context:** #136 #154 must not leak other investigators' work or accuse people on thin evidence.
+- **Decision:** phones, cards, links, wallets and accounts match by normalised value; people and organisations never match by name. Foreign cases are counts; the public check counts only cases with confirmed evidence.

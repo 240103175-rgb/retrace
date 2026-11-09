@@ -18,6 +18,14 @@ import type {
   EvidenceInput,
   Graph,
   Member,
+  Comment,
+  EntityMatch,
+  IntakeReport,
+  PublicCheck,
+  PublicReportInput,
+  RiskRuleSetting,
+  SimilarCase,
+  Task,
   MemberRole,
   Relationship,
   RelationshipInput,
@@ -90,4 +98,22 @@ export interface RetraceApi {
   adminUsers(): Promise<User[]>;
   adminUpdateUser(userId: number, patch: { role?: Role; disabled?: boolean }): Promise<User>;
   adminAudit(params?: AuditFilter): Promise<AuditEvent[]>;
+  adminRiskRules(): Promise<RiskRuleSetting[]>;
+  adminSetRiskRule(id: string, patch: { enabled?: boolean; weight?: number }): Promise<RiskRuleSetting>;
+
+  // v1.4
+  matches(caseId: number): Promise<EntityMatch[]>;
+  similar(caseId: number): Promise<SimilarCase[]>;
+  listComments(caseId: number): Promise<Comment[]>;
+  addComment(caseId: number, text: string): Promise<Comment>;
+  deleteComment(caseId: number, id: number): Promise<void>;
+  listTasks(caseId: number): Promise<Task[]>;
+  addTask(caseId: number, input: { title: string; assigneeId?: number | null }): Promise<Task>;
+  updateTask(caseId: number, id: number, patch: { title?: string; done?: boolean; assigneeId?: number | null }): Promise<Task>;
+  deleteTask(caseId: number, id: number): Promise<void>;
+  listIntake(status?: 'new' | 'taken'): Promise<IntakeReport[]>;
+  takeIntake(id: number): Promise<CaseSummary>;
+  /** No sign-in needed. */
+  submitPublicReport(input: PublicReportInput): Promise<{ reference: string }>;
+  publicCheck(value: string): Promise<PublicCheck>;
 }

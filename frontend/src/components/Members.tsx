@@ -2,7 +2,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-import { T, t } from '../lib/text';
+import { T, t, tf } from '../lib/text';
 import { useToast } from '../lib/toast';
 import { errorKey, useAsync } from '../lib/useAsync';
 import { useApi } from '../services/ApiContext';
@@ -72,7 +72,7 @@ export function Members({ caseData, onChanged }: { caseData: CaseSummary; onChan
                 <b>{m.name}</b> <span className="muted small">{m.email}</span>
               </span>
               {owner ? (
-                <select aria-label={`Роль ${m.email}`} value={m.role} onChange={(e) => void setRole(m, e.target.value as MemberRole)}>
+                <select aria-label={tf('roleOf', { email: m.email })} value={m.role} onChange={(e) => void setRole(m, e.target.value as MemberRole)}>
                   <option value="editor">{T.editor}</option>
                   <option value="viewer">{T.viewer}</option>
                 </select>
@@ -92,7 +92,7 @@ export function Members({ caseData, onChanged }: { caseData: CaseSummary; onChan
         <form className="member-form" onSubmit={add} noValidate>
           <FormError message={error} />
           <input type="email" aria-label={T.memberEmail} placeholder={T.memberEmail} value={form.email} maxLength={120} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <select aria-label="Роль нового участника" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as MemberRole })}>
+          <select aria-label={T.newMemberRole} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as MemberRole })}>
             <option value="viewer">{T.viewer}</option>
             <option value="editor">{T.editor}</option>
           </select>

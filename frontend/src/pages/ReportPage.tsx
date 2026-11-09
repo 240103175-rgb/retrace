@@ -4,7 +4,7 @@ import { SummaryView } from '../components/SummaryView';
 import { useTitle } from '../components/kit';
 import { ErrorBox, Loading } from '../components/ui';
 import { date, dateTime, money } from '../lib/format';
-import { ENTITY_ICON, ENTITY_TYPE, EVIDENCE_TYPE, RELATIONSHIP, STATUS, T, VERIFICATION } from '../lib/text';
+import { ENTITY_ICON, ENTITY_TYPE, EVIDENCE_TYPE, RELATIONSHIP, STATUS, T, tf, VERIFICATION } from '../lib/text';
 import { useAsync } from '../lib/useAsync';
 import { useApi } from '../services/ApiContext';
 
@@ -12,7 +12,7 @@ export function ReportPage() {
   const api = useApi();
   const { id, reportId } = useParams();
   const report = useAsync(() => api.getReport(Number(id), Number(reportId)), [api, id, reportId]);
-  useTitle(report.data ? `Отчёт: ${report.data.snapshot.case.title}` : 'Отчёт');
+  useTitle(report.data ? tf('reportTitleOf', { title: report.data.snapshot.case.title }) : T.reportTitle);
   if (report.error) return <ErrorBox error={report.error} onRetry={report.reload} />;
   if (!report.data) return <Loading />;
   const r = report.data;
@@ -44,7 +44,7 @@ export function ReportPage() {
             </span>
             <span className="report-no">
               {T.reportNo}
-              {r.id} · дело #{s.case.id}
+              {r.id} · {tf('caseNo', { id: s.case.id })}
             </span>
           </div>
           <p className="report-kicker">{T.reportFrom} {dateTime(r.createdAt)}</p>
@@ -124,7 +124,7 @@ export function ReportPage() {
         </section>
 
         <section className="limits">
-          <h2>5. Ограничения</h2>
+          <h2>5. {T.limits}</h2>
           <p>{T.reportLimits}</p>
           {r.fingerprint && (
             <p className="fingerprint small">

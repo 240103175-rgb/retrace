@@ -67,7 +67,11 @@ export function extractEntities(text) {
 
 /** Comparison key: digits for phones and cards; links without scheme, www. and trailing slash; case-insensitive text otherwise. */
 export function key(type, label) {
-  if (type === 'phone' || type === 'card') return digits(label);
+  if (type === 'card') return digits(label);
+  if (type === 'phone') {
+    const d = digits(label);
+    return d.length === 11 && d.startsWith('8') ? `7${d.slice(1)}` : d; // 8 701… and +7 701… are the same KZ number
+  }
   const text = String(label).trim().toLocaleLowerCase();
   return type === 'link' ? text.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '') : text;
 }

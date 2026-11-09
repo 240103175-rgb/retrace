@@ -31,6 +31,7 @@ services:
       DATABASE_URL: postgres://retrace:${POSTGRES_PASSWORD}@db:5432/retrace
       SEED_DEMO: ${SEED_DEMO:-true}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set in .env}
+      TRUST_PROXY: 1 # behind Caddy: rate limits use the real client address
     mem_limit: 384m
 
   caddy:

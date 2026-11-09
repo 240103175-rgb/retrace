@@ -117,6 +117,12 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
         ['GET', `/cases/${bank}/entity-suggestions`],
         ['GET', `/cases/${bank}/summary`],
         ['GET', `/cases/${bank}/members`],
+        ['GET', `/cases/${bank}/matches`],
+        ['GET', `/cases/${bank}/similar`],
+        ['GET', `/cases/${bank}/comments`],
+        ['POST', `/cases/${bank}/comments`, { text: 'x' }],
+        ['GET', `/cases/${bank}/tasks`],
+        ['POST', `/cases/${bank}/tasks`, { title: 'x' }],
         ['POST', `/cases/${bank}/members`, { email: 'aigerim@retrace.test', role: 'editor' }],
         ['GET', `/cases/${bank}/risk`],
         ['GET', `/cases/${bank}/reports`],
@@ -211,6 +217,51 @@ for (const [kind, makeRepo] of Object.entries(REPOSITORIES)) {
       assert.equal((await call('POST', `/cases/${olx}/members`, { token: tokens.daniyar, body: { email: 'admin@retrace.test', role: 'viewer' } })).status, 403);
       assert.equal((await call('DELETE', `/cases/${olx}/members/${uid}`, { token: t })).status, 204);
       assert.equal((await call('GET', `/cases/${olx}`, { token: tokens.daniyar })).status, 404);
+    });
+
+    it('v1.4 over HTTP: public report and check, intake, matches, similar, comments, tasks, rule settings', async () => {
+      const t = tokens.aigerim;
+      const olx = ctx.olx.id;
+      const pub = await call('POST', '/public/reports', { body: { description: 'Позвонили из «банка» и попросили код из SMS для отмены перевода', contact: 'a@b.kz', consent: true } });
+      assert.equal(pub.status, 201);
+      assert.equal((await call('POST', '/public/reports', { body: { description: 'x', consent: true }, invalid: true })).status, 400);
+      const check = await call('GET', '/public/check?value=' + encodeURIComponent('https://kaspl.kz'));
+      assert.deepEqual(check.data.signals, ['typosquat']);
+      const intake = (await call('GET', '/intake', { token: t })).data;
+      const mine = intake.find((r) => r.reference === pub.data.reference);
+      const taken = await call('POST', `/intake/${mine.id}/take`, { token: t });
+      assert.equal(taken.status, 201);
+      assert.equal((await call('POST', `/intake/${mine.id}/take`, { token: tokens.daniyar })).data.error.code, 'already_taken');
+      assert.equal((await call('GET', '/intake?status=taken', { token: t })).status, 200);
+
+      assert.equal((await call('GET', `/cases/${olx}/matches`, { token: t })).status, 200);
+      assert.equal((await call('GET', `/cases/${olx}/similar`, { token: t })).status, 200);
+      const cm = await call('POST', `/cases/${olx}/comments`, { token: t, body: { text: 'Проверить номер' } });
+      assert.equal(cm.status, 201);
+      assert.equal((await call('GET', `/cases/${olx}/comments`, { token: t })).data.length >= 1, true);
+      assert.equal((await call('DELETE', `/cases/${olx}/comments/${cm.data.id}`, { token: t })).status, 204);
+      const task = await call('POST', `/cases/${olx}/tasks`, { token: t, body: { title: 'Запрос в банк' } });
+      assert.equal((await call('PATCH', `/cases/${olx}/tasks/${task.data.id}`, { token: t, body: { done: true } })).data.done, true);
+      assert.equal((await call('GET', `/cases/${olx}/tasks`, { token: t })).data.length >= 1, true);
+      assert.equal((await call('DELETE', `/cases/${olx}/tasks/${task.data.id}`, { token: t })).status, 204);
+
+      assert.equal((await call('GET', '/admin/risk-rules', { token: t })).status, 403);
+      const rules = (await call('GET', '/admin/risk-rules', { token: tokens.admin })).data;
+      assert.ok(rules.some((r) => r.id === 'seen_elsewhere'));
+      assert.equal((await call('PUT', '/admin/risk-rules/hub_entity', { token: tokens.admin, body: { weight: 12 } })).data.weight, 12);
+      assert.equal((await call('PUT', '/admin/risk-rules/hub_entity', { token: tokens.admin, body: { weight: 10 } })).data.weight, 10);
+    });
+
+    it('rate-limits the public endpoints per client address', async () => {
+      const app2 = createApp({ repo: ctx.repo, now: () => NOW, log: false, limits: { reports: 2, checks: 3 } });
+      const srv = await new Promise((resolve) => { const s = app2.listen(0, () => resolve(s)); });
+      const b2 = `http://localhost:${srv.address().port}/api/v1`;
+      const post = () => fetch(`${b2}/public/reports`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ description: 'Повторное сообщение о мошенничестве', consent: true }) });
+      assert.deepEqual([(await post()).status, (await post()).status, (await post()).status], [201, 201, 429]);
+      const codes = [];
+      for (let i = 0; i < 4; i++) codes.push((await fetch(`${b2}/public/check?value=%2B77001112233`)).status);
+      assert.deepEqual(codes, [200, 200, 200, 429]);
+      srv.close();
     });
 
     it('covers every operation in the contract', () => {
