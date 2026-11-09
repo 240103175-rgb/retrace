@@ -16,7 +16,7 @@ export const VERSION = '1.4.0';
 
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'", // #146 the in-browser OCR engine is WebAssembly
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data:",

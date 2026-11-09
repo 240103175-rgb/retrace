@@ -42,3 +42,4 @@ ADMIN_PASSWORD=… npm run e2e # when the stack was started with ADMIN_PASSWORD
 | 28-kazakh-ui | #157 | Kazakh interface |
 | 29-theme | #159 | light/dark theme |
 | 30-offline | #161 | offline reading (service worker) |
+| 31-ocr | #147 | text from a screenshot (real OCR engine, no third-party requests) |

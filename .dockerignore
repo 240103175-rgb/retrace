@@ -13,3 +13,4 @@ e2e
 _docs
 playwright-report
 test-results
+frontend/public/ocr

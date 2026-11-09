@@ -19,7 +19,7 @@ Investigator (legitimate, sees own cases), admin, another investigator (curious)
 | Repudiation | "I didn't delete that" | Audit log of every change with actor and time; no secrets in it | `addAudit`, #59 |
 | Information disclosure | Reading another investigator's case | 404 for foreign cases (no id enumeration) | 13-probe access test |
 | Information disclosure | Secrets in logs | Request log has method, path, status, time only; error log has method + path | `app.js` (#35) |
-| Information disclosure | XSS stealing tokens | React escaping, no `dangerouslySetInnerHTML`; CSP `script-src 'self'` | #34 |
+| Information disclosure | XSS stealing tokens | React escaping, no `dangerouslySetInnerHTML`; CSP `script-src 'self' 'wasm-unsafe-eval'` (WebAssembly for in-browser OCR, no JavaScript `eval`) | #34 #146 |
 | Information disclosure | Clickjacking | `X-Frame-Options: DENY`, `frame-ancestors 'none'` | #34 |
 | Denial of service | Huge bodies | 100 KB JSON limit; non-JSON bodies 415 | `app.js` (#41) |
 | Elevation of privilege | Investigator calling admin endpoints | `requireAdmin` in services; last active admin cannot be demoted/disabled | `services.admin*` |

@@ -77,3 +77,8 @@ Each entry: context → decision → alternatives considered → consequences.
 ## 2026-11-09 — Cross-case matching by identifiers only
 - **Context:** #136 #154 must not leak other investigators' work or accuse people on thin evidence.
 - **Decision:** phones, cards, links, wallets and accounts match by normalised value; people and organisations never match by name. Foreign cases are counts; the public check counts only cases with confirmed evidence.
+
+## 2026-11-09 — OCR in the browser, models served by the app
+- **Context:** #146 needs text from screenshots of chats and receipts; sending evidence images to a cloud OCR service would hand victims' data to a third party.
+- **Decision:** tesseract.js (approved by the user) runs in a Web Worker. `frontend/scripts/ocr-assets.mjs` copies the worker, the three LSTM-only WebAssembly cores and the Russian, Kazakh and English `best_int` models (~8 MB) into `public/ocr/` before `dev` and `build`; the library is pointed at them so it never uses its CDN defaults. The engine is loaded only when someone presses «Распознать текст». The recognised text opens as an unsaved draft.
+- **Consequences:** the image grows by ~20 MB; the first recognition downloads ~12 MB once (the models are then cached in IndexedDB); CSP gains `'wasm-unsafe-eval'`. Recognition quality depends on the screenshot — the person must review the text, which is why nothing is saved automatically.

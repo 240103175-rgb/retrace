@@ -2,6 +2,17 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/). Issues refer to https://github.com/240103175-rgb/retrace/issues.
 
+## [Unreleased]
+
+### Added
+- Text from screenshots: «Распознать текст» on PNG, JPEG and WebP attachments recognises Russian, Kazakh and English
+  text in the browser (tesseract.js) and opens it in a new evidence draft for review; progress and cancel; nothing is
+  saved automatically and the image never leaves the browser — the engine and models are served from `/ocr/` (#146, #147).
+- `/api/v1/health` reports the running commit; deploy jobs wait until the site runs the commit they tested (#114).
+
+### Changed
+- CSP `script-src` allows `'wasm-unsafe-eval'` (WebAssembly only, not JavaScript `eval`) for the OCR engine (#146).
+
 ## [1.4.0] — 2026-11-09
 
 ### Added
