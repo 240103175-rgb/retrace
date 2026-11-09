@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { date, money } from '../lib/format';
-import { EVIDENCE_TYPE, T, t, VERIFICATION } from '../lib/text';
+import { EVIDENCE_TYPE, T, t, tf, VERIFICATION } from '../lib/text';
 import { useToast } from '../lib/toast';
 import { errorKey, useAsync } from '../lib/useAsync';
 import type { CaseTabProps } from '../pages/CasePage';
@@ -48,6 +48,13 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
       : EMPTY;
     setDraft(d);
     setInitial(d);
+  };
+
+  // #146 recognised screenshot text becomes a new draft; the person reviews it and saves (or cancels).
+  const fromScreenshot = (text: string, filename: string) => {
+    open();
+    setDraft({ ...EMPTY, content: text.slice(0, 5000), source: tf('ocrSource', { file: filename }).slice(0, 200) });
+    window.scrollTo?.({ top: 0, behavior: 'smooth' });
   };
 
   const save = async (ev: FormEvent) => {
@@ -203,7 +210,7 @@ export function EvidenceTab({ caseData, editable, onChanged }: CaseTabProps) {
                   {T.source}: {e.source}
                 </p>
               )}
-              <Attachments caseId={caseData.id} evidenceId={e.id} files={e.attachments ?? []} editable={editable} onChanged={() => (list.reload(), onChanged())} />
+              <Attachments caseId={caseData.id} evidenceId={e.id} files={e.attachments ?? []} editable={editable} onChanged={() => (list.reload(), onChanged())} onRecognized={editable ? fromScreenshot : undefined} />
               {editable && (
                 <div className="item-actions">
                   <button type="button" className="btn btn-ghost btn-xs" onClick={() => open(e)}>

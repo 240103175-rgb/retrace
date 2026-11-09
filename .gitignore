@@ -12,3 +12,4 @@ test-results/
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+frontend/public/ocr/

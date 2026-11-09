@@ -1,6 +1,8 @@
 // #25 files attached to one piece of evidence: list, upload with a SHA-256 checksum, download, delete.
-import { useRef, useState, type ChangeEvent } from 'react';
-import { T, t } from '../lib/text';
+// #146 image files: recognise their text in the browser and hand it to the evidence form for review.
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { OCR_TYPES, recognizeText, type OcrJob } from '../lib/ocr';
+import { T, t, tf } from '../lib/text';
 import { useToast } from '../lib/toast';
 import { errorKey } from '../lib/useAsync';
 import { useApi } from '../services/ApiContext';
@@ -39,14 +41,19 @@ interface Props {
   files: Attachment[];
   editable: boolean;
   onChanged(): void;
+  /** Recognised text from an image attachment; nothing is saved until the person saves the form. */
+  onRecognized?(text: string, filename: string): void;
 }
 
-export function Attachments({ caseId, evidenceId, files, editable, onChanged }: Props) {
+export function Attachments({ caseId, evidenceId, files, editable, onChanged, onRecognized }: Props) {
   const api = useApi();
   const toast = useToast();
   const confirm = useConfirm();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [ocr, setOcr] = useState<{ id: number; percent: number } | null>(null);
+  const job = useRef<OcrJob | null>(null);
+  useEffect(() => () => job.current?.cancel(), []);
 
   const upload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -87,6 +94,26 @@ export function Attachments({ caseId, evidenceId, files, editable, onChanged }: 
     }
   };
 
+  const recognize = async (a: Attachment) => {
+    if (!onRecognized || job.current) return;
+    setOcr({ id: a.id, percent: 0 });
+    try {
+      const { blob } = await api.downloadAttachment(caseId, evidenceId, a);
+      job.current = recognizeText(blob, (p) => setOcr({ id: a.id, percent: Math.round(p * 100) }));
+      const text = await job.current.result;
+      if (!text) toast('err', T.ocrEmpty);
+      else {
+        onRecognized(text, a.filename);
+        toast('ok', T.ocrReview);
+      }
+    } catch (err) {
+      if ((err as Error)?.name !== 'AbortError') toast('err', (err as { status?: number })?.status ? t(errorKey(err)) : T.ocrFailed);
+    } finally {
+      job.current = null;
+      setOcr(null);
+    }
+  };
+
   if (!files.length && !editable) return null;
   return (
     <div className="files" data-testid="attachments">
@@ -102,6 +129,21 @@ export function Attachments({ caseId, evidenceId, files, editable, onChanged }: 
               <code className="small" title={`SHA-256: ${a.sha256}`} aria-label={`SHA-256 ${a.sha256}`}>
                 SHA-256 {a.sha256.slice(0, 12)}…
               </code>
+              {onRecognized && OCR_TYPES.includes(a.mimeType) &&
+                (ocr?.id === a.id ? (
+                  <>
+                    <span className="muted small" role="status" aria-live="polite">
+                      {tf('ocrRunning', { p: ocr.percent })}
+                    </span>
+                    <button type="button" className="btn btn-ghost btn-xs" onClick={() => job.current?.cancel()}>
+                      {T.ocrCancel}
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="btn btn-ghost btn-xs" disabled={ocr !== null} title={T.ocrHint} aria-label={`${T.ocr}: ${a.filename}`} onClick={() => void recognize(a)}>
+                    {T.ocr}
+                  </button>
+                ))}
               {editable && (
                 <button type="button" className="btn btn-ghost btn-xs" aria-label={`${T.delete} ${a.filename}`} onClick={() => void remove(a)}>
                   ×
