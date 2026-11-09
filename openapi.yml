@@ -33,6 +33,7 @@ paths:
                   status: { type: string, enum: [ok] }
                   storage: { type: string }
                   version: { type: string }
+                  commit: { type: [string, 'null'], description: 'Git commit of the running build, when the platform provides it' }
 
   /auth/register:
     post:

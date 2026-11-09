@@ -18,7 +18,7 @@ stack ──────────────┘                            d
 | infra | `cfn-lint` on the CloudFormation template, `terraform fmt`/`validate`, production compose file valid |
 | stack | builds the Docker image, `docker compose up --wait` (app + PostgreSQL), non-root check, smoke, **integration tests**, **Playwright end-to-end tests** (one spec per feature, report uploaded as an artifact), restart and check that data survived |
 | publish | main only, after all of the above: pushes `ghcr.io/240103175-rgb/retrace:latest` and `:sha-<commit>` |
-| deploy-* | run only when their repository variables exist; each finishes with a health check that fails the run if the site is down |
+| deploy-* | run only when their repository variables exist; each waits until `/api/v1/health` reports the commit just tested (`commit` field: Render's `RENDER_GIT_COMMIT`, or `GIT_COMMIT` baked into the GHCR image) and fails the run otherwise |
 
 A failing test blocks publishing and every deployment. Deploy credentials: Render deploy hook (secret),
 AWS through a GitHub OIDC role, Google Cloud through Workload Identity Federation — no long-lived cloud keys.

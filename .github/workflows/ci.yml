@@ -190,6 +190,7 @@ jobs:
         with:
           context: .
           push: true
+          build-args: GIT_COMMIT=${{ github.sha }}
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
@@ -213,14 +214,15 @@ jobs:
         run: |
           test -n "$HOOK" || { echo "RENDER_DEPLOY_HOOK_URL secret is missing"; exit 1; }
           curl -fsS -X POST "$HOOK" > /dev/null
-      - name: Wait for the new version and check health
+      - name: Wait until the site runs this commit
         run: |
           for i in $(seq 1 60); do
             body=$(curl -fsS "${{ vars.RENDER_URL }}/api/v1/health" || true)
             echo "$body"
-            echo "$body" | grep -q '"status":"ok"' && exit 0
+            echo "$body" | grep -q "\"commit\":\"${GITHUB_SHA}\"" && exit 0
             sleep 15
           done
+          echo "The site did not switch to ${GITHUB_SHA} within 15 minutes"
           exit 1
 
   deploy-aws:
@@ -248,7 +250,7 @@ jobs:
           aws ssm wait command-executed --command-id "$id" --instance-id "${{ vars.AWS_INSTANCE_ID }}"
       - name: Health check
         run: |
-          for i in $(seq 1 30); do curl -fsS "${{ vars.AWS_URL }}/api/v1/health" && exit 0; sleep 10; done
+          for i in $(seq 1 30); do curl -fsS "${{ vars.AWS_URL }}/api/v1/health" | grep -q "\"commit\":\"${GITHUB_SHA}\"" && exit 0; sleep 10; done
           exit 1
 
   deploy-gcp:
@@ -275,5 +277,5 @@ jobs:
             --command "cd /opt/retrace && sudo docker compose pull app && sudo docker compose up -d && sudo docker image prune -f"
       - name: Health check
         run: |
-          for i in $(seq 1 30); do curl -fsS "${{ vars.GCP_URL }}/api/v1/health" && exit 0; sleep 10; done
+          for i in $(seq 1 30); do curl -fsS "${{ vars.GCP_URL }}/api/v1/health" | grep -q "\"commit\":\"${GITHUB_SHA}\"" && exit 0; sleep 10; done
           exit 1

@@ -37,7 +37,7 @@ describe('HTTP hardening (#33 #34 #35 #41 #42 #43)', () => {
   it('#33 health is public and names the storage', async () => {
     const { res, body } = await get('/api/v1/health', false);
     assert.equal(res.status, 200);
-    assert.deepEqual(body, { status: 'ok', storage: 'memory', version: VERSION });
+    assert.deepEqual(body, { status: 'ok', storage: 'memory', version: VERSION, commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || null });
     assert.match(readFileSync(new URL('../../openapi.yml', import.meta.url), 'utf8'), new RegExp(`\\n  version: ${VERSION.replace(/\./g, '\\.')}\\n`)); // contract and server agree
   });
 
